@@ -1,0 +1,1052 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agentic Event Tiering — UX Decision Doc</title>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#151b23; --panel2:#1b232d; --line:#27313d;
+    --ink:#e6edf3; --ink2:#9aa7b5; --ink3:#6b7889;
+    --suppress:#64748b; --murmur:#38bdf8; --milestone:#a78bfa;
+    --outcome:#34d399; --chat:#fbbf24; --cond:#fb7185;
+    --p0:#f43f5e; --p1:#fb923c; --p2:#facc15; --p3:#64748b;
+    --radius:14px; --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.55;
+    -webkit-font-smoothing:antialiased;background-image:radial-gradient(60rem 40rem at 80% -10%,rgba(167,139,250,.08),transparent),radial-gradient(50rem 30rem at -10% 10%,rgba(56,189,248,.06),transparent);background-attachment:fixed}
+  a{color:var(--murmur);text-decoration:none}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 24px}
+
+  /* HERO */
+  header.hero{padding:64px 0 40px;border-bottom:1px solid var(--line)}
+  .eyebrow{font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:var(--murmur);font-weight:700}
+  h1{font-size:clamp(28px,4vw,46px);line-height:1.08;margin:14px 0 16px;letter-spacing:-.02em;font-weight:800}
+  h1 .grad{background:linear-gradient(92deg,var(--murmur),var(--milestone) 55%,var(--outcome));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .lede{font-size:18px;color:var(--ink2);max-width:760px}
+  .meta-row{display:flex;flex-wrap:wrap;gap:10px;margin-top:24px}
+  .chip{font-size:12.5px;padding:6px 12px;border:1px solid var(--line);border-radius:999px;color:var(--ink2);background:var(--panel)}
+  .chip b{color:var(--ink)}
+
+  /* SECTION */
+  section{padding:52px 0;border-bottom:1px solid var(--line)}
+  .kicker{font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink3);font-weight:700;margin-bottom:10px}
+  h2{font-size:26px;margin:0 0 8px;letter-spacing:-.01em;font-weight:800}
+  h3{font-size:17px;margin:0 0 6px;font-weight:700}
+  .sub{color:var(--ink2);max-width:820px;margin:0 0 26px}
+  p{margin:0 0 12px}
+
+  /* TIER LEGEND CARDS */
+  .tiergrid{display:grid;grid-template-columns:repeat(5,1fr);gap:14px}
+  @media(max-width:900px){.tiergrid{grid-template-columns:repeat(2,1fr)}}
+  .tcard{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px;position:relative;overflow:hidden}
+  .tcard:before{content:"";position:absolute;inset:0 auto 0 0;width:4px;background:var(--tc)}
+  .tcard .tname{font-weight:800;font-size:15px;display:flex;align-items:center;gap:8px}
+  .dot{width:10px;height:10px;border-radius:50%;background:var(--tc);box-shadow:0 0 0 3px color-mix(in srgb,var(--tc) 25%,transparent)}
+  .tcard .tcount{font-size:30px;font-weight:800;margin:8px 0 2px;font-variant-numeric:tabular-nums}
+  .tcard .tdesc{font-size:13px;color:var(--ink2)}
+  .tcard.suppress{--tc:var(--suppress)}.tcard.murmur{--tc:var(--murmur)}
+  .tcard.milestone{--tc:var(--milestone)}.tcard.outcome{--tc:var(--outcome)}.tcard.chat{--tc:var(--chat)}
+
+  .statline{display:flex;flex-wrap:wrap;gap:14px;margin-top:18px}
+  .statpill{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 16px;font-size:13px;color:var(--ink2)}
+  .statpill b{color:var(--ink);font-size:18px;margin-right:6px;font-variant-numeric:tabular-nums}
+
+  /* LENS PANEL */
+  .lensgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+  @media(max-width:900px){.lensgrid{grid-template-columns:1fr}}
+  .lens{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px}
+  .lens .lh{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+  .lens .ico{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;font-size:15px;background:var(--panel2);border:1px solid var(--line)}
+  .lens .ln{font-weight:700;font-size:14.5px}
+  .lens .verdict{font-size:13.5px;color:var(--ink2)}
+  .lens .verdict b{color:var(--ink)}
+  .judge{background:linear-gradient(180deg,color-mix(in srgb,var(--outcome) 10%,var(--panel)),var(--panel));border-color:color-mix(in srgb,var(--outcome) 35%,var(--line))}
+
+  /* CONTESTED RULINGS */
+  .ruling{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px;margin-bottom:14px}
+  .ruling .rtop{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:10px}
+  code.ev{font-family:var(--mono);font-size:13px;background:var(--panel2);border:1px solid var(--line);padding:3px 8px;border-radius:7px;color:var(--ink)}
+  .flow{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:700}
+  .tg{padding:3px 9px;border-radius:7px;font-size:11.5px;font-weight:800;letter-spacing:.02em;border:1px solid}
+  .tg.suppress{color:var(--suppress);border-color:color-mix(in srgb,var(--suppress) 50%,transparent);background:color-mix(in srgb,var(--suppress) 14%,transparent)}
+  .tg.murmur{color:var(--murmur);border-color:color-mix(in srgb,var(--murmur) 50%,transparent);background:color-mix(in srgb,var(--murmur) 12%,transparent)}
+  .tg.milestone{color:var(--milestone);border-color:color-mix(in srgb,var(--milestone) 50%,transparent);background:color-mix(in srgb,var(--milestone) 12%,transparent)}
+  .tg.outcome{color:var(--outcome);border-color:color-mix(in srgb,var(--outcome) 50%,transparent);background:color-mix(in srgb,var(--outcome) 12%,transparent)}
+  .tg.chat{color:var(--chat);border-color:color-mix(in srgb,var(--chat) 50%,transparent);background:color-mix(in srgb,var(--chat) 12%,transparent)}
+  .tg.conditional{color:var(--cond);border-color:color-mix(in srgb,var(--cond) 50%,transparent);background:color-mix(in srgb,var(--cond) 12%,transparent)}
+  .arrow{color:var(--ink3)}
+  .sev{font-family:var(--mono);font-size:11px;font-weight:800;padding:2px 7px;border-radius:6px}
+  .sev.P0{background:color-mix(in srgb,var(--p0) 18%,transparent);color:var(--p0)}
+  .sev.P1{background:color-mix(in srgb,var(--p1) 18%,transparent);color:var(--p1)}
+  .sev.P2{background:color-mix(in srgb,var(--p2) 18%,transparent);color:var(--p2)}
+  .sev.P3{background:color-mix(in srgb,var(--p3) 22%,transparent);color:var(--ink2)}
+  .ruling .rule{font-size:13.5px;color:var(--ink);background:var(--panel2);border-left:3px solid var(--cond);padding:9px 12px;border-radius:0 8px 8px 0;margin:8px 0}
+  .ruling .why{font-size:13px;color:var(--ink2)}
+  .ruling .why b{color:var(--ink)}
+
+  /* TABLE / LEDGER */
+  .controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:16px}
+  .search{flex:1;min-width:220px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 14px;color:var(--ink);font-size:14px;font-family:var(--sans)}
+  .search::placeholder{color:var(--ink3)}
+  select.ctrl{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;color:var(--ink);font-size:13.5px}
+  .fbtns{display:flex;flex-wrap:wrap;gap:7px}
+  .fb{cursor:pointer;user-select:none;font-size:12.5px;font-weight:700;padding:7px 12px;border-radius:999px;border:1px solid var(--line);background:var(--panel);color:var(--ink2);transition:.12s}
+  .fb[data-on="1"]{color:#0d1117;background:var(--accent,#fff);border-color:var(--accent,#fff)}
+  .fb.suppress{--accent:var(--suppress)}.fb.murmur{--accent:var(--murmur)}.fb.milestone{--accent:var(--milestone)}
+  .fb.outcome{--accent:var(--outcome)}.fb.chat{--accent:var(--chat)}.fb.conditional{--accent:var(--cond)}
+  .fb.toggle[data-on="1"]{color:#0d1117;background:var(--ink);border-color:var(--ink)}
+  .tablewrap{border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;background:var(--panel)}
+  table{width:100%;border-collapse:collapse;font-size:13.5px}
+  thead th{position:sticky;top:0;background:var(--panel2);text-align:left;padding:11px 14px;font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink3);font-weight:700;border-bottom:1px solid var(--line);z-index:2}
+  tbody tr{border-bottom:1px solid var(--line);cursor:pointer}
+  tbody tr:hover{background:var(--panel2)}
+  tbody tr:last-child{border-bottom:none}
+  td{padding:11px 14px;vertical-align:top}
+  td.agent{color:var(--ink2);font-size:12.5px;white-space:nowrap}
+  .flag{display:inline-block;font-size:10.5px;font-weight:800;padding:2px 7px;border-radius:6px;letter-spacing:.03em}
+  .flag.changed{background:color-mix(in srgb,var(--cond) 18%,transparent);color:var(--cond)}
+  .flag.keep{background:var(--panel2);color:var(--ink3);border:1px solid var(--line)}
+  .flag.dead{background:transparent;color:var(--ink3);border:1px dashed var(--line)}
+  .flag.dev{background:color-mix(in srgb,var(--murmur) 16%,transparent);color:var(--murmur);margin-left:5px}
+  .flag.cont{background:color-mix(in srgb,var(--p1) 18%,transparent);color:var(--p1);margin-left:5px}
+  .detail td{background:var(--panel2);color:var(--ink2);font-size:13px;padding:4px 16px 16px 16px}
+  .detail .note{border-left:3px solid var(--milestone);padding:8px 12px;border-radius:0 8px 8px 0;background:var(--bg)}
+  .miniflow{display:inline-flex;align-items:center;gap:6px}
+  .count-note{font-size:12.5px;color:var(--ink3);margin-top:10px}
+  .hide{display:none !important}
+
+  /* MANDATES */
+  .mandate{display:flex;gap:16px;padding:16px 0;border-bottom:1px solid var(--line)}
+  .mandate:last-child{border-bottom:none}
+  .mnum{flex:none;width:40px;height:40px;border-radius:11px;display:grid;place-items:center;font-weight:800;font-size:17px;background:linear-gradient(160deg,var(--milestone),var(--murmur));color:#0d1117}
+  .mandate .mtxt b{color:var(--ink)}
+  .mandate .mtxt{color:var(--ink2);font-size:14px}
+
+  /* DECISION TREE */
+  .tree{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:8px 22px;font-family:var(--mono);font-size:13px;color:var(--ink2);overflow-x:auto}
+  .tree .q{color:var(--milestone);font-weight:700}
+  .tree .t{font-weight:700}
+  .tree .t.suppress{color:var(--suppress)}.tree .t.murmur{color:var(--murmur)}.tree .t.milestone{color:var(--milestone)}
+  .tree .t.outcome{color:var(--outcome)}.tree .t.chat{color:var(--chat)}.tree .t.conditional{color:var(--cond)}
+
+  footer{padding:40px 0 80px;color:var(--ink3);font-size:13px}
+  .callout{background:color-mix(in srgb,var(--p1) 9%,var(--panel));border:1px solid color-mix(in srgb,var(--p1) 30%,var(--line));border-radius:var(--radius);padding:16px 20px;font-size:14px;color:var(--ink2)}
+  .callout b{color:var(--ink)}
+  .navsticky{position:sticky;top:0;z-index:20;backdrop-filter:blur(10px);background:color-mix(in srgb,var(--bg) 82%,transparent);border-bottom:1px solid var(--line)}
+  .navsticky .wrap{display:flex;gap:6px;flex-wrap:wrap;padding-top:11px;padding-bottom:11px;align-items:center}
+  .navsticky a{font-size:12.5px;color:var(--ink2);padding:5px 10px;border-radius:8px}
+  .navsticky a:hover{background:var(--panel);color:var(--ink)}
+  .navsticky .brand{font-weight:800;font-size:13px;color:var(--ink);margin-right:8px}
+</style>
+</head>
+<body>
+
+<div class="navsticky"><div class="wrap">
+  <span class="brand">◆ Event Tiering</span>
+  <a href="#model">Model</a><a href="#dash">Decision map</a><a href="#panel">Stress test</a>
+  <a href="#contested">Contested rulings</a><a href="#ledger">Full ledger</a>
+  <a href="#tree">Decision tree</a><a href="#mandates">Mandates</a><a href="#open" style="color:var(--cond);font-weight:700">Open problems ▸</a>
+</div></div>
+
+<header class="hero"><div class="wrap">
+  <div class="eyebrow">Conversational UX · Agentic-Test</div>
+  <h1>What to show, what to bury:<br><span class="grad">a tiering model for 133 agent events</span></h1>
+  <p class="lede">Eight QI agents stream ~133 distinct websocket/SSE events. The agents are fixed — we can only change the frontend. This doc proposes a five-tier display model, then puts it through a six-lens adversarial stress test plus a reconciliation pass, landing on a defensible per-event verdict for engineering sign-off.</p>
+  <div class="meta-row">
+    <span class="chip"><b>133</b> events mapped</span>
+    <span class="chip"><b>8</b> agents</span>
+    <span class="chip"><b>5</b> display tiers</span>
+    <span class="chip"><b>6</b> stress-test lenses + 1 judge</span>
+    <span class="chip"><b>10</b> events re-tiered <span style="color:var(--ink3)">(18 rows)</span></span>
+    <span class="chip"><b>4</b> open problems resolved</span>
+    <span class="chip">Constraint: <b>frontend-only</b></span>
+  </div>
+</div></header>
+
+<!-- MODEL -->
+<section id="model"><div class="wrap">
+  <div class="kicker">The model</div>
+  <h2>Five tiers, one rule each</h2>
+  <p class="sub">Every event lands in exactly one lane based on a single question: <em>what is the user's job with this information?</em> Lifecycle (<code class="ev">start/progress/end/standalone</code>) decides whether a tier opens a card, updates it, or closes it — it is the verb; the tier is the prominence.</p>
+  <div class="tiergrid">
+    <div class="tcard suppress"><div class="tname"><span class="dot"></span>Suppress</div><div class="tcount" data-c="suppress">—</div><div class="tdesc">Plumbing &amp; dead. Hidden, or behind a dev/verbose toggle. <code class="ev">token_usage</code>, context saves, inbound routing.</div></div>
+    <div class="tcard murmur"><div class="tname"><span class="dot"></span>Murmur</div><div class="tcount" data-c="murmur">—</div><div class="tdesc">One live, breathing status line — replaced in place, never the raw stream. <code class="ev">reasoning</code>, <code class="ev">progress</code>.</div></div>
+    <div class="tcard milestone"><div class="tname"><span class="dot"></span>Milestone</div><div class="tcount" data-c="milestone">—</div><div class="tdesc">The glanceable, collapsible step spine. Failures are a card <em>state</em>, not a new lane. <code class="ev">plan_*</code>, <code class="ev">tool_*</code>, <code class="ev">sub_agent_*</code>.</div></div>
+    <div class="tcard outcome"><div class="tname"><span class="dot"></span>Outcome</div><div class="tcount" data-c="outcome">—</div><div class="tdesc">Persistent, actionable cards + the accept/reject gates. <code class="ev">test_case_saved</code>, <code class="ev">question_asked</code>, charts.</div></div>
+    <div class="tcard chat"><div class="tname"><span class="dot"></span>Chat</div><div class="tcount" data-c="chat">—</div><div class="tdesc">Not an activity tier — conversation bubbles. <code class="ev">message</code>, <code class="ev">user_message</code>, <code class="ev">dev_context</code>.</div></div>
+  </div>
+  <div class="statline">
+    <span class="statpill"><b data-c="conditional">—</b>Conditional — tier resolved at render-time from the payload</span>
+    <span class="statpill"><b data-c="dev">—</b>Dev-toggle / inspect-on-demand enhanced (frontend-only)</span>
+    <span class="statpill"><b data-c="changed">—</b>Events whose tier this review changes</span>
+  </div>
+</div></section>
+
+<!-- DASHBOARD -->
+<section id="dash"><div class="wrap">
+  <div class="kicker">Decision map</div>
+  <h2>Where the 133 events land</h2>
+  <p class="sub">Distribution after all rulings. The spine (Milestone) is the largest lane by design — but the stress test found it was originally <em>over-stuffed</em>, so tool-open and legacy phase ticks were pushed down to Murmur, and the legacy run-close was lifted up to Outcome.</p>
+  <div id="bars"></div>
+  <div class="callout" style="margin-top:22px">
+    <b>The headline finding.</b> The five-tier model is sound for the three <em>typed</em> agents (COMMON, TAA, TPA-v2). Its load-bearing risk is the <em>legacy</em> half (CAA, RAA, TPA-v1) where <code class="ev">lifecycle</code>/<code class="ev">group_type</code> are inferred, not in the wire — and the catch-all <code class="ev">event</code> envelope, which can smuggle a chart or a gap-finding into what looks like a throwaway status line. Both demand a normalization layer the data does not yet provide. See <a href="#mandates">mandates</a>.
+  </div>
+</div></section>
+
+<!-- PANEL -->
+<section id="panel"><div class="wrap">
+  <div class="kicker">Method</div>
+  <h2>Six lenses tried to break it</h2>
+  <p class="sub">Each lens independently scrutinised the proposed Tier column from a different angle, returned reclassifications with severity, then a reconciliation judge re-voted on every event where the lenses disagreed.</p>
+  <div class="lensgrid">
+    <div class="lens"><div class="lh"><div class="ico">⚙️</div><div class="ln">Frontend feasibility</div></div><div class="verdict"><b>Implementable, but not as-is.</b> Every Murmur/Milestone promise for the 3 legacy agents silently assumes a normalization layer. Biggest blocker: the <code class="ev">event</code> envelope as flat Murmur will drop user-facing charts.</div></div>
+    <div class="lens"><div class="lh"><div class="ico">🧠</div><div class="ln">Cognitive load</div></div><div class="verdict"><b>Spine over-pinned.</b> Tool-call pairs + phase/plan overlap turn Milestone into a scrolling wall, while findings &amp; non-terminal errors scroll away. Move tools to Murmur, promote findings/errors.</div></div>
+    <div class="lens"><div class="lh"><div class="ico">💥</div><div class="ln">Data-shape adversary</div></div><div class="verdict"><b>Brittle against the legacy 50%.</b> Two transport shapes (<code class="ev">type</code> vs <code class="ev">entry_type</code>), divergent option/viz/sub-agent payloads, and out-of-order arrivals will mis-tier ~¼ of streams without defensive rules.</div></div>
+    <div class="lens"><div class="lh"><div class="ico">♿</div><div class="ln">Accessibility</div></div><div class="verdict"><b>Sound skeleton, two P0 gaps.</b> Failures &amp; pauses are described as silent visual restyles — strands AT users in undetectable deadlocks. Needs assertive-failure rule + gate focus management.</div></div>
+    <div class="lens"><div class="lh"><div class="ico">🔬</div><div class="ln">Power-user density</div></div><div class="verdict"><b>Serves novices, starves experts.</b> Conflates "hide by default" with "discard" — destroying reasoning trace, validation issues, tracebacks &amp; cost. Fixed by one Dev toggle + inspect-on-demand.</div></div>
+    <div class="lens"><div class="lh"><div class="ico">🧩</div><div class="ln">Cross-agent consistency</div></div><div class="verdict"><b>Highly consistent except the close.</b> Sub-agent lifecycle, saves, gates &amp; plumbing are uniform. The one P0: legacy <code class="ev">session_complete</code> is Milestone while TAA's close is Outcome — on one shared socket.</div></div>
+  </div>
+  <div class="lens judge" style="margin-top:14px"><div class="lh"><div class="ico">⚖️</div><div class="ln">Reconciliation judge — binding ruling</div></div><div class="verdict">Resolved 9 contested events, mostly via <b>hybrids</b> that satisfy multiple lenses instead of binary picks: tier-by-payload (<code class="ev">validation_completed</code>, <code class="ev">event</code>), open-vs-settle timing (<code class="ev">tool_started</code>), and default-tier-plus-reveal (everything power-users wanted). A feasibility P0 (un-renderable) trumps a UX preference; a cognitive-load P0 (wall of noise) trumps a consistency nicety.</div></div>
+</div></section>
+
+<!-- CONTESTED -->
+<section id="contested"><div class="wrap">
+  <div class="kicker">The hard calls</div>
+  <h2>9 contested events, resolved</h2>
+  <p class="sub">These are the events where the lenses genuinely disagreed. Each ruling below is the judge's binding verdict and the hybrid rule that dissolves the conflict.</p>
+  <div id="rulings"></div>
+</div></section>
+
+<!-- LEDGER -->
+<section id="ledger"><div class="wrap">
+  <div class="kicker">The full ledger</div>
+  <h2>Every event, every verdict</h2>
+  <p class="sub">All 133 events. Click any row for the rationale. Filter by tier, search by name, or isolate just the changes. <span style="color:var(--cond);font-weight:700">Rose</span> = tier changed by this review · <span style="color:var(--p1);font-weight:700">CONTESTED</span> = was disputed across lenses · <span style="color:var(--murmur);font-weight:700">DEV</span> = has a dev/inspect reveal.</p>
+  <div class="controls">
+    <input class="search" id="q" placeholder="Search events, agents, rationale…">
+    <select class="ctrl" id="agent"><option value="">All agents</option></select>
+    <div class="fbtns" id="tierfilters">
+      <span class="fb murmur" data-tier="Murmur">Murmur</span>
+      <span class="fb milestone" data-tier="Milestone">Milestone</span>
+      <span class="fb outcome" data-tier="Outcome">Outcome</span>
+      <span class="fb suppress" data-tier="Suppress">Suppress</span>
+      <span class="fb chat" data-tier="Chat">Chat</span>
+      <span class="fb conditional" data-tier="Conditional">Conditional</span>
+    </div>
+    <div class="fbtns">
+      <span class="fb toggle" data-flag="changed">Changed only</span>
+      <span class="fb toggle" data-flag="contested">Contested</span>
+      <span class="fb toggle" data-flag="dev">Dev/inspect</span>
+    </div>
+  </div>
+  <div class="tablewrap"><table>
+    <thead><tr><th style="width:30%">Event</th><th style="width:13%">Agent</th><th style="width:26%">Current → Final</th><th style="width:31%">Status</th></tr></thead>
+    <tbody id="rows"></tbody>
+  </table></div>
+  <div class="count-note" id="countnote"></div>
+</div></section>
+
+<!-- DECISION TREE -->
+<section id="tree"><div class="wrap">
+  <div class="kicker">The router</div>
+  <h2>One pass, top to bottom</h2>
+  <p class="sub">The render layer resolves every frame through this order. Normalization runs first (it must), then tier routing, then the dev/inspect reveals layer on top of any tier.</p>
+  <div class="tree"><pre style="margin:0;white-space:pre-wrap">
+<span class="q">0. NORMALIZE</span>  wire = msg.type==='stream_entry' ? msg.entry_type : msg.type
+            flatten payload/metadata · backfill lifecycle &amp; group_type for legacy
+            coalesce label ??= sub_agent · options→[{id,label}] · viz: payload.data ?? payload
+
+<span class="q">1. Is it transport / plumbing / inbound routing?</span>
+   └─ yes → <span class="t suppress">SUPPRESS</span>   (token_usage, context_saved, *_ticket, github_pr, replay_complete…)
+            └─ but expose in <span class="t conditional">DEV MODE</span> if it carries cost/provenance (token_usage, sprint_issues_loaded)
+
+<span class="q">2. Is it a conversation bubble?</span> (message, user_message, dev_context)
+   └─ yes → <span class="t chat">CHAT</span>          (welcome = greeting bubble — dedupe per thread so reconnects don't re-greet)
+
+<span class="q">3. Generic `event` envelope?</span> → route on inner metadata.event_type
+   ├─ visualization / *_detected / *_complete → <span class="t outcome">OUTCOME</span>
+   └─ else                                     → <span class="t murmur">MURMUR</span>
+
+<span class="q">4. Durable artifact, gate, or run-close briefing?</span>
+   └─ yes → <span class="t outcome">OUTCOME</span>   (*_saved, visualization, question(_asked), phase_review,
+                       summary_generated, legacy session_complete, PR-TAA result + error)
+            gates take focus &amp; pause · validation_completed→Outcome only on fail
+
+<span class="q">5. High-frequency tick / thought / live progress?</span>
+   └─ yes → <span class="t murmur">MURMUR</span>     (reasoning, progress, *_iteration, *_auto_progress,
+                       legacy phase, plan_appended, tier_view_built, ladder_rung_committed,
+                       tool open-phase — settles into Milestone on completion)
+
+<span class="q">6. Otherwise — a discrete step in the run</span>
+   └─        <span class="t milestone">MILESTONE</span>  (session_*, plan_*, phase_*, tool close, sub_agent_* lifecycle,
+                       skill_loaded, scoring_completed, tms_backfill_*)
+            failures = card state + <b>aria-live=assertive</b> · traceback redacted (dev-only)
+  </pre></div>
+</div></section>
+
+<!-- MANDATES -->
+<section id="mandates"><div class="wrap">
+  <div class="kicker">Non-negotiable</div>
+  <h2>Top 5 implementation mandates</h2>
+  <p class="sub">Ranked by severity. Without #1 and #2, the model mis-tiers roughly a quarter of real streams.</p>
+  <div class="mandate"><div class="mnum">1</div><div class="mtxt"><b>Normalization layer (P0, hard dependency).</b> Before the UI sees anything: unwrap the <code class="ev">stream_entry</code>/<code class="ev">entry_type</code> envelope, backfill <code class="ev">lifecycle</code> + validate <code class="ev">group_type</code> for legacy literals, and normalize divergent shapes (<code class="ev">sub_agent</code>↔<code class="ev">label</code>, bare-string↔<code class="ev">{id,label}</code> options, flat↔nested viz). Nothing downstream renders correctly without it.</div></div>
+  <div class="mandate"><div class="mnum">2</div><div class="mtxt"><b>Event-router for the generic <code class="ev">event</code> envelope (P0).</b> Dispatch each <code class="ev">event</code> by inner <code class="ev">metadata.event_type</code>: visualization / <code class="ev">*_detected</code> / <code class="ev">*_complete</code> → Outcome, everything else → Murmur. A flat Murmur tier demonstrably drops charts and gap findings.</div></div>
+  <div class="mandate"><div class="mnum">3</div><div class="mtxt"><b>Terminal-winner &amp; card-close guarantee.</b> Pick one visible close per agent (so <code class="ev">agent_done</code> + <code class="ev">session_completed</code> + summary don't triple-render). Every opened card must close on its lifecycle <code class="ev">end</code> keyed by <code class="ev">group_id</code> (not <code class="ev">tool_call_id</code>, which RAA omits) — re-home the latent <code class="ev">validation_failed</code> / <code class="ev">tool_complete</code> to Milestone so a stray completion still settles its card.</div></div>
+  <div class="mandate"><div class="mnum">4</div><div class="mtxt"><b>Gate focus &amp; assertive announce.</b> Outcome gates (<code class="ev">question</code>/<code class="ev">question_asked</code>, <code class="ev">phase_review</code>, validation-fail, PR-TAA terminal) take focus and announce the pause; failures fire <code class="ev">aria-live="assertive"</code>; tracebacks are always redacted from the visible UI.</div></div>
+  <div class="mandate"><div class="mnum">5</div><div class="mtxt"><b>Session-sticky Dev mode + per-card inspect (frontend-only).</b> One toggle reveals the reasoning trace, <code class="ev">validation_iteration.issues[]</code>, <code class="ev">error.traceback</code>, <code class="ev">token_usage</code> cost/latency, full <code class="ev">result_preview</code>/<code class="ev">args_preview</code>, and <code class="ev">skill_description</code> — a render-layer reveal, never an event-schema change.</div></div>
+</div></section>
+
+<!-- ============ OPEN PROBLEMS ============ -->
+<style>
+  .pblock{margin:30px 0 8px;padding-top:26px;border-top:1px dashed var(--line)}
+  .pnum{display:inline-grid;place-items:center;width:26px;height:26px;border-radius:8px;background:var(--cond);color:#0d1117;font-weight:800;font-size:14px;margin-right:10px;vertical-align:middle}
+  .ptitle{font-size:20px;font-weight:800;display:inline;vertical-align:middle}
+  .pgap{font-size:12px;font-weight:700;color:var(--cond);border:1px solid color-mix(in srgb,var(--cond) 45%,transparent);background:color-mix(in srgb,var(--cond) 12%,transparent);padding:3px 10px;border-radius:999px;margin-left:10px;vertical-align:middle}
+  .decision{background:linear-gradient(180deg,color-mix(in srgb,var(--outcome) 9%,var(--panel)),var(--panel));border:1px solid color-mix(in srgb,var(--outcome) 30%,var(--line));border-radius:var(--radius);padding:14px 18px;margin:14px 0;font-size:14px}
+  .decision b{color:var(--outcome)}
+  /* simulator */
+  .sim{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px;margin:16px 0}
+  .simbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+  .simbtn{cursor:pointer;font-weight:700;font-size:13px;padding:8px 16px;border-radius:9px;border:1px solid var(--line);background:var(--panel2);color:var(--ink)}
+  .simbtn.primary{background:linear-gradient(160deg,var(--murmur),var(--milestone));color:#0d1117;border:none}
+  .simbtn:hover{filter:brightness(1.12)}
+  .simclock{font-family:var(--mono);font-size:12px;color:var(--ink3);margin-left:auto}
+  .murmurframe{background:#0a0e13;border:1px solid var(--line);border-radius:10px;padding:0}
+  .mlabel{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink3);padding:9px 14px 0;font-weight:700}
+  .murmurline{font-family:var(--mono);font-size:14px;padding:12px 14px 16px;min-height:26px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .seg{display:inline-flex;align-items:center;gap:7px}
+  .seg.action{color:#dbeafe;font-weight:700}
+  .seg.detail{color:var(--ink2)}
+  .seg.thought{color:var(--ink3);font-style:italic}
+  .seg .sep{color:#2c3947;margin:0 2px}
+  .pbar{display:inline-block;width:60px;height:7px;border-radius:4px;background:#1c2530;overflow:hidden;vertical-align:middle}
+  .pbar i{display:block;height:100%;background:var(--murmur)}
+  .spin{display:inline-block;width:11px;height:11px;border:2px solid #2c3947;border-top-color:var(--murmur);border-radius:50%;animation:sp .8s linear infinite}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  .stallpin{margin:0 14px 12px;padding:7px 12px;border-radius:8px;background:color-mix(in srgb,var(--p1) 14%,transparent);border:1px solid color-mix(in srgb,var(--p1) 40%,transparent);color:var(--p1);font-size:12.5px;font-weight:700;display:none}
+  .chips{display:flex;gap:7px;flex-wrap:wrap;padding:0 14px 14px}
+  .chipl{font-size:11px;font-family:var(--mono);padding:4px 9px;border-radius:7px;border:1px solid var(--line);background:var(--panel2);color:var(--ink3);opacity:.4;transition:.2s}
+  .chipl.live{opacity:1;color:var(--ink);border-color:var(--seg-c,var(--murmur));box-shadow:0 0 0 1px var(--seg-c,var(--murmur)) inset}
+  .chipl.win{background:var(--seg-c,var(--murmur));color:#0a0e13;font-weight:700}
+  .simnote{font-size:12.5px;color:var(--ink3);padding:0 2px;min-height:18px}
+  /* router demo */
+  .routerdemo{display:grid;grid-template-columns:230px 1fr;gap:16px;margin:14px 0}
+  @media(max-width:760px){.routerdemo{grid-template-columns:1fr}}
+  .rsamples{display:flex;flex-direction:column;gap:8px}
+  .rsample{cursor:pointer;text-align:left;font-size:12.5px;padding:10px 12px;border-radius:9px;border:1px solid var(--line);background:var(--panel);color:var(--ink2)}
+  .rsample:hover{border-color:var(--murmur);color:var(--ink)}
+  .rsample.sel{border-color:var(--murmur);background:color-mix(in srgb,var(--murmur) 12%,var(--panel));color:var(--ink)}
+  .rsample code{font-family:var(--mono);font-size:11.5px;color:var(--ink)}
+  .rresult{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px}
+  .rladder{list-style:none;margin:0 0 12px;padding:0;font-family:var(--mono);font-size:12px}
+  .rladder li{padding:6px 10px;border-radius:7px;color:var(--ink3);margin-bottom:3px;border:1px solid transparent}
+  .rladder li.hit{background:color-mix(in srgb,var(--outcome) 13%,transparent);border-color:color-mix(in srgb,var(--outcome) 40%,transparent);color:var(--ink);font-weight:700}
+  .rladder li.passed{color:var(--ink3);text-decoration:line-through;opacity:.55}
+  .rverdict{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:13.5px;margin-top:6px}
+  .rold{font-size:12px;padding:5px 10px;border-radius:8px;border:1px dashed var(--p1);color:var(--p1);background:color-mix(in srgb,var(--p1) 8%,transparent)}
+  /* density demo */
+  .densitydemo{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px;margin:14px 0}
+  .sumbanner{background:linear-gradient(120deg,color-mix(in srgb,var(--outcome) 16%,var(--panel2)),var(--panel2));border:1px solid color-mix(in srgb,var(--outcome) 35%,var(--line));border-radius:12px;padding:14px 16px;position:sticky;top:48px;z-index:3}
+  .sumtop{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+  .sumtop .big{font-size:17px;font-weight:800}
+  .sumtop .brk{font-size:12.5px;color:var(--ink2)}
+  .meter{flex:1;min-width:120px;height:8px;border-radius:5px;background:#1c2530;overflow:hidden;margin:0 6px}
+  .meter i{display:block;height:100%;background:var(--outcome);width:0;transition:width .35s}
+  .ctas{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+  .cta{cursor:pointer;font-size:12px;font-weight:700;padding:7px 13px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--ink)}
+  .cta.go{background:var(--outcome);color:#0a0e13;border:none}
+  .cta:hover{filter:brightness(1.1)}
+  .group{border:1px solid var(--line);border-radius:11px;margin-top:12px;overflow:hidden}
+  .ghead{display:flex;align-items:center;gap:10px;padding:12px 14px;cursor:pointer;background:var(--panel2)}
+  .ghead:hover{background:var(--panel)}
+  .gtri{transition:.2s;color:var(--ink3);font-size:11px}
+  .group.open .gtri{transform:rotate(90deg)}
+  .gtitle{font-weight:700;font-size:14px}
+  .gpill{font-size:10.5px;font-weight:800;padding:2px 8px;border-radius:6px;background:color-mix(in srgb,var(--outcome) 15%,transparent);color:var(--outcome)}
+  .gcount{font-size:12px;color:var(--ink3);margin-left:auto}
+  .gbody{display:none;padding:6px 12px 12px}
+  .group.open .gbody{display:block}
+  .tcard2{display:flex;align-items:center;gap:10px;padding:9px 11px;border:1px solid var(--line);border-radius:9px;margin-top:7px;background:var(--bg);font-size:13px}
+  .tcard2.acc{border-color:color-mix(in srgb,var(--outcome) 45%,transparent)}
+  .tcard2.rej{opacity:.5;text-decoration:line-through}
+  .tid{font-family:var(--mono);font-size:11.5px;color:var(--ink2)}
+  .badge{font-size:9.5px;font-weight:800;padding:2px 6px;border-radius:5px}
+  .badge.NEW{background:color-mix(in srgb,var(--murmur) 18%,transparent);color:var(--murmur)}
+  .badge.UPDATE{background:color-mix(in srgb,var(--chat) 18%,transparent);color:var(--chat)}
+  .prchip{font-size:10px;font-weight:800;padding:2px 7px;border-radius:5px;border:1px solid var(--line);color:var(--ink2)}
+  .stat{margin-left:auto;font-size:11.5px;font-weight:700}
+  .stat.pending{color:var(--ink3)}.stat.accepted{color:var(--outcome)}.stat.rejected{color:var(--ink3)}
+  .cardbtns{display:flex;gap:6px}
+  .minib{cursor:pointer;font-size:11px;font-weight:700;padding:4px 9px;border-radius:6px;border:1px solid var(--line);background:var(--panel2);color:var(--ink2)}
+  .minib:hover{color:var(--ink)}
+  .morechip{margin-top:8px;font-size:12px;color:var(--murmur);cursor:pointer;font-weight:700}
+  .morechip:hover{text-decoration:underline}
+</style>
+<section id="open"><div class="wrap">
+  <div class="kicker">Beyond tiering</div>
+  <h2>Four problems the tier model leaves open</h2>
+  <p class="sub">Tiering decides which lane an event enters. It does not decide what happens when many events fight for <em>one</em> lane, when two agents close in one turn, when an unrecognised event arrives, or when one lane floods. Those are design decisions — resolved here, two of them with playable widgets, because contention and density are exactly what a static doc can't show.</p>
+
+  <!-- P1: MURMUR ARBITRATION -->
+  <div class="pblock">
+    <span class="pnum">1</span><span class="ptitle">Murmur has many feeders but one slot</span><span class="pgap">biggest gap</span>
+  </div>
+  <p class="sub" style="margin:12px 0 0">A tool is open while <code class="ev">reasoning</code> and a <code class="ev">sub_agent_progress</code> are also firing. Who owns the line? Without arbitration it thrashes, or a thought overwrites the live action.</p>
+  <div class="decision"><b>Decision —</b> Murmur is <b>one line with up to three fixed segments: <code class="ev">[ACTION] · [DETAIL] · [THOUGHT]</code></b>, each owned by a different priority band. A live action (tool-open or a determinate sub-agent step) always holds ACTION and can never be overwritten by a thought; reasoning is demoted to THOUGHT and is the first thing dropped under width pressure. Each channel holds its segment for a short TTL after its last frame, then yields; when nothing is live, the line clears. Parallel fan-out replaces ACTION with an N-of-M worker strip; a stall pins a banner <em>above</em> the line instead of competing for it.</p>
+
+  <div class="sim">
+    <div class="simbar">
+      <button class="simbtn primary" id="mPlay">▶ Play a run</button>
+      <button class="simbtn" id="mReset">↺ Reset</button>
+      <span style="font-size:12px;color:var(--ink3)">watch ACTION survive a flood of thoughts &amp; ticks</span>
+      <span class="simclock" id="mClock">0.0s</span>
+    </div>
+    <div class="murmurframe">
+      <div class="mlabel">The single murmur line</div>
+      <div class="murmurline" id="mLine"><span class="seg detail" style="color:var(--ink3)">— idle —</span></div>
+      <div class="stallpin" id="mStall"></div>
+      <div class="chips" id="mChips"></div>
+    </div>
+    <div class="simnote" id="mNote" style="margin-top:10px"></div>
+  </div>
+
+  <h3 style="margin-top:22px">Priority lattice — who wins the slot</h3>
+  <div class="tablewrap" style="margin-top:10px"><table>
+    <thead><tr><th style="width:7%">Rank</th><th style="width:23%">Channel</th><th style="width:14%">Segment</th><th style="width:38%">Why this rank</th><th style="width:18%">Hold / decay</th></tr></thead>
+    <tbody style="font-size:13px">
+      <tr><td><b style="color:var(--p1)">0</b></td><td>Stall pin</td><td>banner above</td><td>Same key repeats ≥3× — user needs "it's stuck," not a flicker</td><td>until key changes</td></tr>
+      <tr><td><b>1</b></td><td>Parallel fan-out strip</td><td>ACTION</td><td>≥2 workers open — concurrency is the headline; one line would lie</td><td>while ≥2 open</td></tr>
+      <tr><td><b>2</b></td><td>Tool open <code class="ev">tool_started/tool_start</code></td><td>ACTION</td><td>"What it's doing right now" — highest-value single fact</td><td>8s soft / 20s hard · cleared on settle</td></tr>
+      <tr><td><b>3</b></td><td>Determinate sub-progress</td><td>ACTION</td><td>A measured action with an end in sight → progress bar</td><td>4s</td></tr>
+      <tr><td><b>4</b></td><td>Indeterminate <code class="ev">progress</code></td><td>DETAIL</td><td>Enriches the action, never blocks it</td><td>4s</td></tr>
+      <tr><td><b>5</b></td><td>Validation iteration</td><td>DETAIL</td><td>Loop status worth tracking — detail, not headline</td><td>5s</td></tr>
+      <tr><td><b>6</b></td><td>Legacy / structural ticks</td><td>DETAIL</td><td>Low-info heartbeat — rate-limited to ≤1 / 1.5s so it can't thrash</td><td>3s</td></tr>
+      <tr><td><b>7</b></td><td><code class="ev">reasoning</code></td><td>THOUGHT</td><td>Ambient thought — valuable flavour, first to be dropped</td><td>6s</td></tr>
+    </tbody>
+  </table></div>
+  <p class="count-note">A feeder may only occupy its assigned segment, so a rank-7 thought can <em>never</em> overwrite a rank-2 tool-open — they live in different segments. AT announce stays <code class="ev">aria-live=polite</code>, atomic, throttled to ≤1 / 1.5s, announcing only the most-important live segment. <b>Backend ask:</b> stable <code class="ev">tool_call_id</code> on RAA's <code class="ev">tool_start</code> + a per-issue <code class="ev">key</code> for exact stall detection (frontend works without, with TTL/string-match heuristics).</p>
+
+  <!-- P2: MULTI-AGENT CLOSE -->
+  <div class="pblock">
+    <span class="pnum">2</span><span class="ptitle">Two agents, one socket, one turn — how many closes?</span><span class="pgap">design decision</span>
+  </div>
+  <p class="sub" style="margin:12px 0 0">SCA forwards the union of TAA + CAA into one thread. Both can emit an Outcome-tier run-close in a single turn. Two closes, or one merged sprint close?</p>
+  <div class="decision"><b>Decision —</b> <b>Separate, source-attributed closes under one turn-level cap — not a backend merge.</b> The two briefings answer different questions ("coverage done" vs "authoring done") and stay distinct, durable cards. The frontend renders an <b>agent-grouped spine</b> — one chronological timeline where contiguous same-source events collapse into source-labelled bands (◈ Coverage / ◇ Authoring), keyed off the <code class="ev">source</code> tag — then composes a thin, non-authoritative <b>turn cap</b> ("Sprint coverage turn complete · 14 cases · 3 scenarios · 4 analyses · 7 gaps"). The cap is suppressed when only one agent ran.</p>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:8px" class="cmgrid">
+    <div>
+      <h3>Close state machine</h3>
+      <div class="tree"><pre style="margin:0;white-space:pre-wrap;font-size:12px">
+OPEN
+ ├─ taaClose ─→ <span class="t milestone">TAA_CLOSED</span> ┐
+ ├─ caaClose ─→ <span class="t milestone">CAA_CLOSED</span> ┤→ <span class="q">SETTLING</span>
+ │                              (quiet timer ~2s,
+ │                               reset by any activity)
+ │   SETTLING ─2nd close──→ SETTLING (record, shorten)
+ │   SETTLING ─quiet drains→ <span class="t outcome">TURN_DONE</span>  ⇒ cap
+ └─ error / session_failed ─→ <span class="t conditional">TURN_FAILED</span>
+        partial ⇒ "coverage done · authoring failed"</pre></div>
+    </div>
+    <div>
+      <h3>What the user lands on</h3>
+      <div class="tree"><pre style="margin:0;white-space:pre-wrap;font-size:12px">
+◈ <span class="t murmur">Coverage Analysis</span>            [caa]
+│ ▸ Gap Detection · 7 findings
+│ ◷ Coverage donut 240/72
+│ ✓ <span class="t outcome">Coverage complete · 4 saved · 7 gaps</span>
+◇ <span class="t milestone">Test Authoring</span>              [taa]
+│ ▣ Scenario: Guest checkout (P1)
+│   └ TC-105 · TC-106  [NEW]
+│ ✓ <span class="t outcome">14 test cases · 3 scenarios</span>
+─────────────────────────────────
+✦ <span style="color:var(--ink2)">Sprint turn complete · composed cap</span></pre></div>
+    </div>
+  </div>
+  <div class="callout" style="margin-top:14px"><b>Mandate reword:</b> "one visible close per agent" was the per-stream invariant, not the fan-in rule. New wording: <b>"One visible close per AGENT, and one cap per TURN."</b> They're different layers of the same hierarchy (turn ⊃ agent-run ⊃ groups), not in conflict. <b>Backend ask — REQUIRED:</b> every forwarded frame carries a resolved <code class="ev">source ∈ {taa,caa}</code> (stamp untagged → taa). <b>OPTIONAL but clean:</b> an SCA-authored <code class="ev">sca_turn_completed</code> envelope with <code class="ev">agents_ran</code> + <code class="ev">rollup</code> — removes the quiet-timer guess and makes the cap authoritative.</div>
+
+  <!-- P3: EVENT ROUTER -->
+  <div class="pblock">
+    <span class="pnum">3</span><span class="ptitle">The event router fails quietly on its open tail</span><span class="pgap">silent data loss</span>
+  </div>
+  <p class="sub" style="margin:12px 0 0"><code class="ev">*_detected/*_complete/visualization → Outcome, else Murmur.</code> But <code class="ev">event_type</code> is runtime &amp; unbounded — a future <code class="ev">gap_found</code> misses the suffix and silently falls to Murmur, dropping the very chart the rule exists to protect.</p>
+  <div class="decision"><b>Decision —</b> Route <b>fail-VISIBLE, by payload shape, not by name suffix.</b> A layered ladder: (0) transport guard → Suppress; (1) explicit allowlist → tier; (2) <b>payload-shape sniffing — the real safety net</b>: chart-shaped / findings-bearing / artifact-shaped → Outcome regardless of name; (3) suffix as a weak <em>upgrade-only</em> hint; (4) safe default — any payload-bearing unknown becomes a persistent <b>"Unrecognised result" card</b>, never ephemeral Murmur. Every allowlist miss fires a deduped telemetry beacon, and a backend namespacing ask makes routing eventually deterministic.</p>
+
+  <div class="routerdemo">
+    <div class="rsamples" id="rSamples"></div>
+    <div class="rresult">
+      <div style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink3);font-weight:700;margin-bottom:8px">Routing ladder</div>
+      <ul class="rladder" id="rLadder">
+        <li data-l="0">L0 · transport / plumbing guard → Suppress</li>
+        <li data-l="1">L1 · explicit allowlist (agent:event_type) → tier</li>
+        <li data-l="2">L2 · payload-shape sniff (chart / findings / artifact) → Outcome</li>
+        <li data-l="3">L3 · suffix hint (upgrade-only, never demotes)</li>
+        <li data-l="4">L4 · safe default → "Unrecognised result" card / log line</li>
+      </ul>
+      <div class="rverdict" id="rVerdict"></div>
+      <div class="simnote" id="rNote" style="margin-top:10px"></div>
+    </div>
+  </div>
+  <div class="callout" style="margin-top:6px"><b>Backend ask — REQUIRED:</b> a top-level <code class="ev">display_tier</code> hint (<code class="ev">outcome|milestone|murmur|suppress|chat</code>) the emit site sets once — collapses the whole heuristic. <b>NICE-TO-HAVE:</b> a reserved <code class="ev">event_type</code> prefix convention (<code class="ev">out.* / viz.* / sig.* / step.* / log.* / sys.*</code>) — prefixes are unambiguous where suffixes aren't. <b>Telemetry:</b> <code class="ev">event_router.unmatched_type</code> beacon (type · agent · shape-fingerprint · resolved tier · routed-by), first occurrence sent immediately, rest aggregated every 60s — so a new type is discovered in hours, then promoted from shape-routed → allowlisted in one release.</div>
+
+  <!-- P4: OUTCOME DENSITY -->
+  <div class="pblock">
+    <span class="pnum">4</span><span class="ptitle">Outcome cards flood the wall</span><span class="pgap">14+ cards, 14+ decisions</span>
+  </div>
+  <p class="sub" style="margin:12px 0 0">A regression run emits 14+ <code class="ev">test_case_saved</code> cards — each correctly Outcome, but together a wall, and 14+ accept/reject decisions.</p>
+  <div class="decision"><b>Decision —</b> <b>Summary-first, grouped, collapse-past-N, review-then-bulk-accept.</b> Land on a pinned summary banner with a triage CTA; nest cases under their scenario; collapse groups past 3 and cards past 5; stream live into an accumulating group counter (no scroll-yank); turn 14 decisions into 1–3 clicks (Accept all / Accept P0-P1 / per-scenario) with per-card override; reconcile out-of-band <code class="ev">acceptance_status_updated</code> by <code class="ev">test_case_id</code>.</p>
+
+  <div class="densitydemo">
+    <div class="simbar" style="margin-bottom:12px">
+      <button class="simbtn primary" id="dReplay">▶ Replay live authoring</button>
+      <button class="simbtn" id="dSettle">⤓ Jump to return moment</button>
+      <span style="font-size:12px;color:var(--ink3)">3 scenarios · 14 cases — try the bulk actions</span>
+    </div>
+    <div class="sumbanner">
+      <div class="sumtop">
+        <span class="big" id="dBig">Authoring…</span>
+        <span class="brk" id="dBrk"></span>
+        <span class="meter"><i id="dMeter"></i></span>
+        <span style="font-size:12px;font-weight:700;color:var(--ink2)" id="dRev">0 / 14 reviewed</span>
+      </div>
+      <div class="ctas" id="dCtas" style="display:none">
+        <button class="cta go" data-act="all">Accept all (14)</button>
+        <button class="cta" data-act="p01">Accept all P0/P1</button>
+        <button class="cta" data-act="newonly">Review NEW only</button>
+        <button class="cta" data-act="reset">↺ Reset review</button>
+      </div>
+    </div>
+    <div id="dGroups"></div>
+  </div>
+  <div class="callout"><b>Thresholds:</b> groups collapse past <b>3</b> (only the active/first expanded), cards collapse past <b>5</b> with a "+N more" chip, a hard ceiling at <b>50</b> forces header-only triage. <b>Live:</b> a rolling window of the last 3 authored cards keeps a streaming group ≤4 tall; no autoscroll if the user scrolled up (a "↓ N new" pill instead). <b>Default = review-then-bulk-accept</b> — nothing auto-accepts, nothing is pre-selected. <b>Edges:</b> lazy-parent placeholder for a <code class="ev">test_case_saved</code> that beats its <code class="ev">scenario_saved</code>; rejected cards demote out of the open-card budget; groups virtualise (collapsed = one header row, no child DOM).</p>
+</div></section>
+
+<footer><div class="wrap">
+  Annotated decision doc · generated from <code class="ev">agentic-event-map.md</code> + supporting references · six-lens subagent stress test + reconciliation pass.
+  Tier assignments are a frontend proposal for engineering verification — emit sites remain ground truth.
+</div></footer>
+
+<script>
+/* ---- DATA: every event, current → final tier, status ---- */
+const D = [
+ // COMMON
+ {e:"session_started",a:"COMMON",g:"session·start",c:"Milestone",f:"Milestone",st:"keep",note:"The turn container. Minimal render — opens the session frame."},
+ {e:"session_paused",a:"COMMON",g:"session·progress",c:"Milestone",f:"Milestone",st:"keep",dev:0,sev:"P1",note:"A11y: standalone it's a silent repaint. Must announce 'Paused — waiting for your input' (polite), paired with the gate that caused it."},
+ {e:"session_resumed",a:"COMMON",g:"session·progress",c:"Milestone",f:"Milestone",st:"keep",note:"Resumes after a pause/interrupt."},
+ {e:"session_completed",a:"COMMON",g:"session·end",c:"Milestone",f:"Outcome",st:"changed",sev:"P2",note:"CHANGED→Outcome. The single visible run-close: settles every group, marks the run complete, and seeds the feedback row — peer to summary_generated/result. Render summary_generated INTO it; dedup terminal renders by session group_id."},
+ {e:"session_terminated",a:"COMMON",g:"session·end",c:"Milestone",f:"Milestone",st:"keep",note:"Terminal close on user/forced termination."},
+ {e:"session_failed",a:"COMMON",g:"session·end",c:"Milestone",f:"Milestone",st:"keep",dev:0,sev:"P0",note:"A11y P0: terminal failure must fire aria-live=assertive, never a silent frame restyle, or AT users wait on a dead session. Must NEVER be folded into Suppress."},
+ {e:"plan_started",a:"COMMON",g:"plan·start",c:"Milestone",f:"Milestone",st:"keep",note:"Renders the plan checklist up front. Stays the milestone; appends mutate it in place."},
+ {e:"plan_appended",a:"COMMON",g:"plan·progress",c:"Milestone",f:"Murmur",st:"changed",sev:"P2",note:"CHANGED. An append is a mutation of the already-open plan card, not a new glanceable step. Murmur the tick; merge items into the existing card silently. A fresh spine row per append duplicates the plan."},
+ {e:"plan_completed",a:"COMMON",g:"plan·end",c:"Milestone",f:"Milestone",st:"keep",note:"Closes the plan card with final counts."},
+ {e:"plan_item_started",a:"COMMON",g:"plan_item·start",c:"Milestone",f:"Milestone",st:"keep",note:"Marks one plan item in-progress."},
+ {e:"plan_item_completed",a:"COMMON",g:"plan_item·end",c:"Milestone",f:"Milestone",st:"keep",note:"Discrete checklist tick — correctly Milestone (vs the continuous *_auto_progress which is Murmur)."},
+ {e:"phase_started",a:"COMMON",g:"phase·start",c:"Milestone",f:"Milestone",st:"keep",sev:"P2",note:"Keep, but dedupe against plan_item boundaries — plan_started already groups items by phase, so don't render the same boundary twice."},
+ {e:"phase_completed",a:"COMMON",g:"phase·end",c:"Milestone",f:"Milestone",st:"keep",note:"Closes a phase card. If it carries review_required:true, promote to an Outcome gate to match legacy phase_review."},
+ {e:"tool_started",a:"COMMON",g:"tool·start",c:"Milestone",f:"Conditional",st:"changed",cont:1,sev:"P0",rule:"Murmur while active → collapsed Milestone on tool_completed; failure opens a card.",note:"CONTESTED→RESOLVED. UX P0: a tool-open + tool-complete pair = 2 spine rows per call = wall of noise. Show the active tool as the one murmur line; settle into a single collapsed milestone at close. Feasibility preserved — the card still materializes at completion, keyed on group_id."},
+ {e:"tool_completed",a:"COMMON",g:"tool·end",c:"Milestone",f:"Milestone",st:"keep",dev:1,sev:"P1",note:"CONTESTED→RESOLVED. Settles the tool's single collapsed spine row. result_preview lives behind inspect-on-demand (count/few rows inline, full snippet on click), never raw JSON."},
+ {e:"tool_failed",a:"COMMON",g:"tool·end",c:"Milestone",f:"Milestone",st:"keep",sev:"P1",note:"Error state of the tool card. aria-live=assertive; text + icon (not colour alone)."},
+ {e:"question_asked",a:"COMMON",g:"question·start",c:"Outcome",f:"Outcome",st:"keep",sev:"P0",note:"Human-in-the-loop gate — pauses the run. Move focus to the question container once, announce the pause assertively, render options[{id,label}] as real buttons (label=name, id=submit value)."},
+ {e:"question_answered",a:"COMMON",g:"question·end",c:"Outcome",f:"Suppress",st:"changed",note:"CHANGED→Suppress. Ack only — the user's pick already renders as a right-aligned bubble and the gate closes, so the raw event is not separately painted (it would leak an 'Answered: …' line). Closes the gate; returns focus to the stream."},
+ {e:"progress",a:"COMMON",g:"session·standalone",c:"Murmur",f:"Murmur",st:"keep",note:"Free-form progress log line. Collapse into the one murmur line."},
+ {e:"reasoning",a:"COMMON",g:"session·standalone",c:"Murmur",f:"Murmur",st:"keep",dev:1,sev:"P0",note:"The thinking trace. Live murmur for novices; Dev mode retains the full scroll-back ('why did it do that'). Data is per-line standalone — retaining it costs nothing at the wire."},
+ {e:"token_usage",a:"COMMON",g:"session·standalone",c:"Suppress",f:"Suppress",st:"keep",dev:1,sev:"P1",note:"Hidden from end users. Dev mode surfaces per-turn + cumulative cost/latency footer (total_tokens, model). The cost/latency debug primitive."},
+ {e:"error",a:"COMMON",g:"session·standalone",c:"Milestone",f:"Milestone",st:"keep",dev:1,cont:1,sev:"P1",rule:"Default Milestone (assertive, traceback redacted). PR-TAA error → Outcome (terminal).",note:"CONTESTED→RESOLVED. A standalone non-terminal error has a card to attach to → Milestone state + assertive announce; traceback is dev-only. PR-TAA's error has no spine and ends the run → Outcome retry card."},
+ {e:"message",a:"COMMON",g:"session·standalone",c:"Chat",f:"Chat",st:"keep",note:"The user turn — a chat bubble, not an activity event."},
+ {e:"dev_context",a:"COMMON",g:"session·standalone",c:"Chat",f:"Chat",st:"keep",note:"Context from a GitHub PR / Claude Code session — an input bubble in the transcript."},
+ {e:"welcome",a:"COMMON",g:"session·standalone",c:"Chat",f:"Chat",st:"keep",sev:"P3",note:"DESIGNER DECISION: stays Chat. Renders as a visible greeting bubble in the transcript. Keep in Chat, but dedupe by thread so a reconnect/historical replay doesn't re-greet — do NOT render it on session_restored / replay_complete paths."},
+ {e:"replay_complete",a:"COMMON",g:"session·standalone",c:"Suppress",f:"Suppress",st:"keep",dev:1,note:"Transport control frame. Dev mode may show replayed_count to confirm full history."},
+ // TAA
+ {e:"sub_agent_started",a:"TAA",g:"sub_agent·start",c:"Milestone",f:"Milestone",st:"keep",note:"Nested sub-agent card. Title = label ?? sub_agent. Explorer / validator / TPA-adhoc."},
+ {e:"sub_agent_progress",a:"TAA",g:"sub_agent·progress",c:"Murmur",f:"Murmur",st:"keep",note:"High-frequency (screenshot 3/8). Determinate murmur with a progress bar from step_number/total_steps — correct."},
+ {e:"sub_agent_signals",a:"TAA",g:"sub_agent·progress",c:"Milestone",f:"Milestone",st:"keep",dev:1,cont:1,sev:"P1",note:"CONTESTED→RESOLVED. Stays a findings attachment on the sub-agent card (uniform across 4 agents — fragmenting breaks the SCA forwarder). Promote to Outcome only if a finding carries its own accept/reject — none do today. The durable actionable surface is analysis_saved / summary."},
+ {e:"sub_agent_completed",a:"TAA",g:"sub_agent·end",c:"Milestone",f:"Milestone",st:"keep",note:"Closes the card: 'Mapped 8 pages, 3 forms'."},
+ {e:"sub_agent_failed",a:"TAA",g:"sub_agent·end",c:"Milestone",f:"Milestone",st:"keep",sev:"P1",note:"Failed card state; assertive announce."},
+ {e:"scenario_saved",a:"TAA",g:"scenario·start",c:"Outcome",f:"Outcome",st:"keep",note:"Opens the scenario group test cases nest under. A durable artifact."},
+ {e:"scenario_updated",a:"TAA",g:"scenario·progress",c:"Outcome",f:"Outcome",st:"keep",note:"Existing scenario updated — reconcile into the card."},
+ {e:"scenario_deleted",a:"TAA",g:"scenario·end",c:"Outcome",f:"Outcome",st:"keep",note:"Scenario permanently removed."},
+ {e:"test_case_saved",a:"TAA",g:"test_case·start",c:"Outcome",f:"Outcome",st:"keep",sev:"P2",note:"The core payoff — full preview card nested under its scenario. Ordering guard: if it arrives before scenario_saved, create a placeholder parent and reparent, never orphan or drop it."},
+ {e:"test_case_updated",a:"TAA",g:"test_case·progress",c:"Outcome",f:"Outcome",st:"keep",note:"Change-summary line on the existing card (fields_changed[])."},
+ {e:"validation_started",a:"TAA",g:"validation·start",c:"Milestone",f:"Milestone",st:"keep",note:"The validation loop began."},
+ {e:"validation_iteration",a:"TAA",g:"validation·progress",c:"Murmur",f:"Murmur",st:"keep",dev:1,sev:"P0",note:"Murmur for the happy path; Dev mode retains per-iteration passed + issues[] ('Missing expected result on step 4'). Promote a pinned 'still working on X' line if the same issue repeats ≥3× (stall signal)."},
+ {e:"validation_completed",a:"TAA",g:"validation·end",c:"Milestone",f:"Conditional",st:"changed",dev:1,cont:1,sev:"P2",rule:"final_pass=true → collapsed Milestone close. final_pass=false → Outcome card + retry.",note:"CONTESTED→RESOLVED. A passing validation needs no action (Milestone + inspectable iteration history); a failing one is actionable and must persist (Outcome). Tier-by-payload is feasible — final_pass is documented."},
+ {e:"validation_failed",a:"TAA",g:"validation·end",c:"Suppress",f:"Milestone",st:"changed",sev:"P2",note:"CHANGED (dead/latent). Re-home from Suppress to Milestone: its live siblings are Milestone, and tiering a failure path 'hidden' sets a wrong precedent. If the call site is ever wired, the tier is already correct."},
+ {e:"skill_loaded",a:"TAA",g:"session·standalone",c:"Milestone",f:"Milestone",st:"keep",dev:1,sev:"P1",note:"Shows the lens ('Reading the Figma file…'). TAA sends only skill_name (no description) — ship the skill_id→label map or it renders the raw kebab id. Inspect reveals description + inputs."},
+ {e:"context_saved",a:"TAA",g:"session·standalone",c:"Suppress",f:"Suppress",st:"keep",note:"Working context persisted. Internal — hidden even from dev mode (no debug value)."},
+ {e:"summary_generated",a:"TAA",g:"session·standalone",c:"Outcome",f:"Outcome",st:"keep",sev:"P2",note:"The 'return-moment' briefing. Must render INTO the single visible close (session_completed), not as a competing second bubble."},
+ {e:"agent_done",a:"TAA",g:"session·standalone",c:"Milestone",f:"Milestone",st:"keep",note:"Turn-end marker — mostly internal. Suppress when a summary/close follows it to avoid a double 'finished'."},
+ {e:"acceptance_status_updated",a:"TAA",g:"session·standalone",c:"Outcome",f:"Outcome",st:"keep",sev:"P2",note:"Human accept/reject result, pushed from a REST callback (out-of-band). Reconcile by test_case_id against persisted card state — tolerate the card not being present (upsert)."},
+ {e:"sprint_issues_loaded",a:"TAA",g:"session·standalone",c:"Suppress",f:"Suppress",st:"keep",dev:1,sev:"P2",note:"Context plumbing. Dev mode may show it as input-provenance ('why did it generate THESE scenarios')."},
+ // CAA
+ {e:"question",a:"CAA",g:"question·standalone",c:"Outcome",f:"Outcome",st:"keep",sev:"P1",note:"Legacy literal (NOT common question_asked). Options are bare strings — adapter must map each to {id:s,label:s}. Same gate semantics: focus + assertive pause."},
+ {e:"phase",a:"CAA",g:"session·standalone",c:"Milestone",f:"Murmur",st:"changed",cont:0,sev:"P1",note:"CHANGED. Legacy 'Entering: reporting · 75%' is a progress tick. Feasibility-decisive: with group_type=session/standalone it is un-renderable as a spine node, so Milestone is structurally impossible. Coerce group_type for routing only."},
+ {e:"event",a:"CAA",g:"session·standalone",c:"Murmur",f:"Conditional",st:"changed",cont:1,sev:"P0",rule:"Router on inner event_type: visualization/*_detected/*_complete → Outcome; else → Murmur.",note:"CHANGED (P0). The catch-all envelope. CAA emits its chart via write('event',{event_type:visualization}) — a flat Murmur drops the donut into a transient line that gets overwritten. Must dispatch on the inner type."},
+ {e:"visualization",a:"CAA",g:"session·standalone",c:"Outcome",f:"Outcome",st:"keep",sev:"P1",note:"Chart Outcome — but CAA nests under payload.data.{viz_type,title,data}. Normalize (coalesce payload.data ?? payload) before charting or the card renders empty (worse than missing). Suppress the card if data is null."},
+ {e:"agent_done",a:"CAA",g:"session·end",c:"Milestone",f:"Milestone",st:"keep",note:"Final assistant message, no further tool calls."},
+ {e:"session_complete",a:"CAA",g:"session·standalone",c:"Milestone",f:"Outcome",st:"changed",sev:"P0",note:"CHANGED (P0). The legacy run-close briefing (analyses_saved, signals[]). Must match the standing of summary_generated/result — SCA forwards CAA verbatim on the same socket as TAA, so a Milestone close here is visibly inconsistent with TAA's Outcome close."},
+ {e:"phase_review",a:"CAA",g:"session·standalone",c:"Outcome",f:"Outcome",st:"keep",sev:"P1",note:"A review/approval gate. Treat like a question (focus + assertive). Dedup against question / session_complete arriving in the same window on the same group_id."},
+ {e:"plan_auto_progress",a:"CAA",g:"session·progress",c:"Murmur",f:"Murmur",st:"keep",note:"Auto plan-progress tick after each tool. Pure cadence — correctly Murmur."},
+ {e:"sub_agent_started",a:"CAA",g:"sub_agent·start",c:"Milestone",f:"Milestone",st:"keep",note:"Spawned sub-agent (gap / impact / requirements). Uses label key (matches TAA)."},
+ {e:"sub_agent_completed",a:"CAA",g:"sub_agent·end",c:"Milestone",f:"Milestone",st:"keep",note:"Finished; tokens + findings count."},
+ {e:"sub_agent_failed",a:"CAA",g:"sub_agent·end",c:"Milestone",f:"Milestone",st:"keep",sev:"P1",note:"Sub-agent error; assertive."},
+ {e:"sub_agent_signals",a:"CAA",g:"sub_agent·standalone",c:"Milestone",f:"Milestone",st:"keep",dev:1,cont:1,note:"finding→suggestion pairs. Findings attachment (lifecycle=standalone, so it floats rather than closing the card — render as a findings list under the sub-agent)."},
+ {e:"skill_loaded",a:"CAA",g:"tool·end",c:"Milestone",f:"Milestone",st:"keep",dev:1,note:"Lens ('gap-detection'). CAA includes skill_description. group_type=tool here vs session in TAA — normalize so the chip renders identically."},
+ {e:"context_saved",a:"CAA",g:"tool·end",c:"Suppress",f:"Suppress",st:"keep",note:"save_context. Internal."},
+ {e:"analysis_saved",a:"CAA",g:"tool·end",c:"Outcome",f:"Outcome",st:"keep",note:"Coverage analysis persisted (triggers the viz auto-emit). A durable result."},
+ {e:"validation_iteration",a:"CAA",g:"tool·progress",c:"Murmur",f:"Murmur",st:"keep",dev:1,note:"Self-eval / validate_analysis iteration N. Murmur; issues[] in dev."},
+ // RAA
+ {e:"reasoning",a:"RAA",g:"session·standalone",c:"Murmur",f:"Murmur",st:"keep",dev:1,note:"Live thought-stream. Dev mode retains the trace."},
+ {e:"phase",a:"RAA",g:"phase·standalone",c:"Milestone",f:"Murmur",st:"changed",sev:"P2",note:"CHANGED. Phase transition tick with progress_pct — Murmur, matching CAA/TPA-v1 legacy phase. (group_type=phase here, but standalone, so no open/close.)"},
+ {e:"progress",a:"RAA",g:"session·standalone",c:"Murmur",f:"Murmur",st:"keep",note:"NL progress; also per sub-agent step / budget exhaustion."},
+ {e:"question",a:"RAA",g:"question·standalone",c:"Outcome",f:"Outcome",st:"keep",sev:"P0",note:"Gate with bare-string options (['Yes, draft it','No, skip']) and the prompt in content, no question field. A11y P0: without focus + assertive the run silently deadlocks. Options adapter mandatory or buttons render undefined."},
+ {e:"event",a:"RAA",g:"session·standalone",c:"Murmur",f:"Conditional",st:"changed",cont:1,sev:"P0",rule:"Router on inner event_type (see CAA event).",note:"CHANGED (P0). Generic envelope: session lifecycle markers + send_event + charts. Route by inner type."},
+ {e:"error",a:"RAA",g:"session·standalone",c:"Milestone",f:"Milestone",st:"keep",dev:1,sev:"P1",note:"Fatal/blocking error, payload carries raw traceback. Milestone state + assertive; traceback redacted to dev-only."},
+ {e:"token_usage",a:"RAA",g:"session·standalone",c:"Suppress",f:"Suppress",st:"keep",dev:1,note:"Per-LLM-call accounting. Dev cost footer."},
+ {e:"agent_done",a:"RAA",g:"session·end",c:"Milestone",f:"Milestone",st:"keep",note:"Reason node response, no tool calls."},
+ {e:"visualization",a:"RAA",g:"tool·standalone",c:"Outcome",f:"Outcome",st:"keep",sev:"P1",note:"Chart Outcome — RAA puts viz_type/title/data FLAT in payload (vs CAA's nested). One normalizer must handle both before charting."},
+ {e:"tool_start",a:"RAA",g:"tool·start",c:"Milestone",f:"Conditional",st:"changed",cont:1,sev:"P2",rule:"Murmur while active. If no tool_call_id → ephemeral line, not an openable card (no guaranteed closer).",note:"CONTESTED→RESOLVED. RAA tool_start carries ONLY tool_name — no args_preview, no tool_call_id. A pinned card you can't expand or correlate to a close is pure noise and risks a permanently-spinning card. Murmur it; correlate close by group_id fallback."},
+ {e:"skill_loaded",a:"RAA",g:"tool·end",c:"Milestone",f:"Milestone",st:"keep",dev:1,note:"Analysis lens (failure-classification…). Includes skill_description."},
+ {e:"context_saved",a:"RAA",g:"tool·end",c:"Suppress",f:"Suppress",st:"keep",note:"After save_context. Internal."},
+ {e:"analysis_saved",a:"RAA",g:"tool·end",c:"Outcome",f:"Outcome",st:"keep",note:"After save_analysis_result (triggers auto-viz). Durable."},
+ {e:"validation_result",a:"RAA",g:"tool·standalone",c:"Milestone",f:"Milestone",st:"keep",dev:1,sev:"P1",note:"PASS/FAIL outcome. Keep Milestone; expose checks{} + issues[] via inspect, not just the headline."},
+ {e:"sub_agent_start",a:"RAA",g:"sub_agent·start",c:"Milestone",f:"Milestone",st:"keep",sev:"P2",note:"Name under key 'sub_agent' (NOT label) — normalize or the card title is undefined."},
+ {e:"sub_agent_complete",a:"RAA",g:"sub_agent·end",c:"Milestone",f:"Milestone",st:"keep",note:"Closes worker (sub_agent, findings_published)."},
+ {e:"sub_agent_error",a:"RAA",g:"sub_agent·end",c:"Milestone",f:"Milestone",st:"keep",sev:"P1",note:"Sub-agent failed; assertive."},
+ {e:"sub_agent_signals",a:"RAA",g:"sub_agent·standalone",c:"Milestone",f:"Milestone",st:"keep",dev:1,note:"finding→suggestion findings list."},
+ {e:"plan_auto_progress",a:"RAA",g:"plan·progress",c:"Murmur",f:"Murmur",st:"keep",note:"Plan tracker auto-advances after tool execution."},
+ {e:"phase_review",a:"RAA",g:"plan·progress",c:"Outcome",f:"Outcome",st:"keep",sev:"P1",note:"Mid-session review gate. group_type=plan here (session in CAA, phase in TPA-v1) — needs a synthetic gate id to attach accept/reject consistently."},
+ {e:"session_complete",a:"RAA",g:"session·end",c:"Milestone",f:"Outcome",st:"changed",sev:"P0",note:"CHANGED (P0). Legacy run-close briefing — promote to Outcome to match the visible-close concept across agents."},
+ {e:"summary",a:"RAA",g:"session·standalone",c:"Suppress",f:"Suppress",st:"dead",note:"Dead/unused — docstring only, no emit site. Correctly suppressed."},
+ {e:"tool_complete",a:"RAA",g:"tool·end",c:"Suppress",f:"Milestone",st:"changed",sev:"P3",note:"CHANGED (dead/latent). Re-home from Suppress to Milestone: it's a generic tool·end. If ever emitted, Suppress would swallow a tool-card close, leaving the tool_start card hung open forever."},
+ // TPA v1
+ {e:"event",a:"TPA v1",g:"session·standalone",c:"Murmur",f:"Conditional",st:"changed",cont:1,sev:"P0",rule:"Router on inner event_type.",note:"CHANGED (P0). Generic envelope: session lifecycle text + metadata.event_type sub-events."},
+ {e:"question",a:"TPA v1",g:"question·standalone",c:"Outcome",f:"Outcome",st:"keep",note:"Asks the user and pauses (+ optional bare-string choices)."},
+ {e:"progress",a:"TPA v1",g:"session·standalone",c:"Murmur",f:"Murmur",st:"keep",note:"NL progress; sub-agents emit per-step."},
+ {e:"reasoning",a:"TPA v1",g:"session·standalone",c:"Murmur",f:"Murmur",st:"keep",dev:1,note:"Live thought stream (phase + thought + action)."},
+ {e:"phase",a:"TPA v1",g:"phase·start",c:"Milestone",f:"Murmur",st:"changed",sev:"P2",note:"CHANGED. Legacy phase transition tick → Murmur (consistent with CAA/RAA)."},
+ {e:"token_usage",a:"TPA v1",g:"session·standalone",c:"Suppress",f:"Suppress",st:"keep",dev:1,note:"Per-LLM-call accounting."},
+ {e:"message",a:"TPA v1",g:"session·standalone",c:"Chat",f:"Chat",st:"keep",note:"Plain message (autonomous/batch auto-proceed) — chat bubble."},
+ {e:"error",a:"TPA v1",g:"session·standalone",c:"Milestone",f:"Milestone",st:"keep",dev:1,sev:"P1",note:"Graph execution failure. Milestone state + assertive; traceback dev-only."},
+ {e:"agent_done",a:"TPA v1",g:"session·end",c:"Milestone",f:"Milestone",st:"keep",note:"Reason-node content, no tool calls."},
+ {e:"tool_start",a:"TPA v1",g:"tool·start",c:"Milestone",f:"Conditional",st:"changed",cont:1,sev:"P2",rule:"Murmur while active → settle on completion.",note:"CHANGED. Non-spawn tool invocation — same open-as-murmur rule as COMMON tool_started."},
+ {e:"sub_agent_start",a:"TPA v1",g:"sub_agent·start",c:"Milestone",f:"Milestone",st:"keep",note:"spawn_* / spawn_parallel. Name under 'sub_agent' key — normalize."},
+ {e:"sub_agent_complete",a:"TPA v1",g:"sub_agent·end",c:"Milestone",f:"Milestone",st:"keep",note:"Finished (tokens / findings / result collections)."},
+ {e:"sub_agent_error",a:"TPA v1",g:"sub_agent·end",c:"Milestone",f:"Milestone",st:"keep",sev:"P1",note:"Failed; assertive."},
+ {e:"sub_agent_signals",a:"TPA v1",g:"sub_agent·standalone",c:"Milestone",f:"Milestone",st:"keep",dev:1,note:"Findings/suggestions for plan-review accumulation."},
+ {e:"skill_loaded",a:"TPA v1",g:"tool·end",c:"Milestone",f:"Milestone",st:"keep",dev:1,note:"Planning lens (blast_radius, regression_planning)."},
+ {e:"context_saved",a:"TPA v1",g:"tool·end",c:"Suppress",f:"Suppress",st:"keep",note:"save_context completed."},
+ {e:"plan_result_saved",a:"TPA v1",g:"plan·standalone",c:"Outcome",f:"Outcome",st:"keep",note:"save_plan_result persisted an analysis. Durable artifact."},
+ {e:"plan_created",a:"TPA v1",g:"plan·start",c:"Milestone",f:"Milestone",st:"keep",note:"write_plan created the initial plan."},
+ {e:"plan_appended",a:"TPA v1",g:"plan·progress",c:"Milestone",f:"Murmur",st:"changed",sev:"P2",note:"CHANGED. append_plan added items — mutate the open plan card in place (matches COMMON plan_appended)."},
+ {e:"plan_progress",a:"TPA v1",g:"plan·progress",c:"Murmur",f:"Murmur",st:"keep",note:"update_plan manually changed an item status."},
+ {e:"plan_auto_progress",a:"TPA v1",g:"plan·progress",c:"Murmur",f:"Murmur",st:"keep",note:"Plan status auto-advanced after tool execution."},
+ {e:"phase_review",a:"TPA v1",g:"phase·end",c:"Outcome",f:"Outcome",st:"keep",sev:"P1",note:"Mid-session approval gate. group_type=phase here."},
+ {e:"session_complete",a:"TPA v1",g:"session·end",c:"Milestone",f:"Outcome",st:"changed",sev:"P0",note:"CHANGED (P0). Legacy run-close → Outcome."},
+ {e:"validation_result",a:"TPA v1",g:"plan·standalone",c:"Milestone",f:"Milestone",st:"keep",dev:1,note:"validate_plan PASS/FAIL. issues[]/checks via inspect."},
+ // TPA v2
+ {e:"signal_worker_started",a:"TPA v2",g:"sub_agent·start",c:"Milestone",f:"Murmur",st:"changed",sev:"P1",note:"CHANGED→Murmur. A parallel worker owns the fan-out lane on the Murmur line, not a spine row. When ≥2 are open concurrently, show a compact N-of-M worker strip (never one flickering line); each settles into a Milestone on signal_worker_completed."},
+ {e:"signal_worker_completed",a:"TPA v2",g:"sub_agent·end",c:"Milestone",f:"Milestone",st:"keep",note:"'Discovery · 47 candidates in 2.3s'. result_ref (redis) not for display."},
+ {e:"signal_worker_failed",a:"TPA v2",g:"sub_agent·end",c:"Milestone",f:"Milestone",st:"keep",dev:1,sev:"P1",note:"Failed-worker state; assertive. error_class/message/attempt via inspect."},
+ {e:"scoring_completed",a:"TPA v2",g:"session·progress",c:"Milestone",f:"Milestone",st:"keep",dev:1,cont:1,sev:"P2",note:"CONTESTED→RESOLVED. A step, not a gated artifact — nothing waits on the human. Single spine row 'Scored 312 candidates'; tier_bucket_counts mini-chart renders on expand, not in the Outcome lane."},
+ {e:"tier_view_built",a:"TPA v2",g:"session·progress",c:"Murmur",f:"Murmur",st:"keep",dev:1,note:"'smoke tier: 18 candidates' tick. Largely redundant with scoring_completed's chart — reveal-on-demand, rate-limited so it never owns a live region."},
+ {e:"ladder_rung_committed",a:"TPA v2",g:"session·progress",c:"Murmur",f:"Murmur",st:"keep",dev:1,cont:1,sev:"P1",note:"CONTESTED→RESOLVED. A persistence-commit tick. The watching human's job is 'is it progressing', not 'audit the txn'. Stays the rate-limited tick; run_count/case_count audit via inspect/dev. Totals surface in tms_backfill_completed."},
+ {e:"tms_backfill_started",a:"TPA v2",g:"phase·start",c:"Milestone",f:"Milestone",st:"keep",note:"Opens a TMS sync phase card."},
+ {e:"tms_backfill_completed",a:"TPA v2",g:"phase·end",c:"Milestone",f:"Milestone",st:"keep",note:"'Backfill complete · 4 runs, 312 cases'. Surface failures only if >0."},
+ // SCA v2
+ {e:"welcome",a:"SCA v2",g:"session·start",c:"Chat",f:"Chat",st:"keep",sev:"P3",note:"DESIGNER DECISION: stays Chat — the SCA session greeting bubble. Guard only: it fires alongside session_restored on reconnect, so dedupe per thread (render the greeting once, skip it on cold-reconnect replay) to avoid re-greeting on socket flaps."},
+ {e:"session_restored",a:"SCA v2",g:"session·start",c:"Suppress",f:"Suppress",st:"keep",dev:1,sev:"P2",note:"Cold-reconnect replay. Dev marker explains state discontinuities a power user might mistake for a bug. Idempotent (raw dict, no event_id dedup)."},
+ {e:"replay_complete",a:"SCA v2",g:"session·progress",c:"Suppress",f:"Suppress",st:"keep",dev:1,note:"End of TAA+CAA historical replay (replayed_count). Transport."},
+ {e:"event",a:"SCA v2",g:"session·standalone",c:"Murmur",f:"Murmur",st:"keep",note:"Ad-hoc status/notice line (Session cancelled, not found…) — not the generic envelope, so a plain Murmur line is correct here."},
+ {e:"error",a:"SCA v2",g:"session·standalone",c:"Milestone",f:"Milestone",st:"keep",sev:"P1",note:"Connection/auth/lookup failure frame; assertive."},
+ {e:"jira_ticket",a:"SCA v2",g:"inbound·standalone",c:"Suppress",f:"Suppress",st:"keep",note:"Inbound Jira webhook → TAA turn. Never a front-end frame."},
+ {e:"linear_ticket",a:"SCA v2",g:"inbound·standalone",c:"Suppress",f:"Suppress",st:"keep",note:"Inbound Linear webhook → TAA turn."},
+ {e:"clickup_ticket",a:"SCA v2",g:"inbound·standalone",c:"Suppress",f:"Suppress",st:"keep",note:"Inbound ClickUp webhook → TAA turn."},
+ {e:"azure_devops_ticket",a:"SCA v2",g:"inbound·standalone",c:"Suppress",f:"Suppress",st:"keep",note:"Inbound Azure DevOps work-item webhook → TAA turn."},
+ {e:"github_pr",a:"SCA v2",g:"inbound·standalone",c:"Suppress",f:"Suppress",st:"keep",note:"Inbound GitHub PR webhook → TAA PR turn."},
+ {e:"user_message",a:"SCA v2",g:"inbound·standalone",c:"Chat",f:"Chat",st:"keep",note:"The message the user typed — a chat bubble."},
+ {e:"user_context",a:"SCA v2",g:"inbound·standalone",c:"Chat",f:"Chat",st:"keep",note:"Context the user shares (Figma/docs/video) — a log bubble in the chat window."},
+ {e:"runs_updated",a:"SCA v2",g:"session·standalone",c:"Suppress",f:"Suppress",st:"dead",note:"Dead/unused — publish_sprint_event has zero callers. Dashboard-invalidation signal, harmless if it fires."},
+ // PR-TAA
+ {e:"progress",a:"PR-TAA",g:"session·standalone",c:"Murmur",f:"Murmur",st:"keep",note:"Phase ticks: compressing → planning → expanding."},
+ {e:"result",a:"PR-TAA",g:"session·end",c:"Outcome",f:"Outcome",st:"keep",note:"Terminal success — the whole PR authoring result lands as one Outcome bubble (summary + scenarios/test cases). The payoff."},
+ {e:"error",a:"PR-TAA",g:"session·standalone",c:"Milestone",f:"Milestone",st:"keep",sev:"P1",note:"Terminal failure of a 3-event SSE stream. Rendered as a visible Milestone error step (consistent with every other agent's error) so it is never silently dropped. A persistent Outcome card with a retry affordance is a future enhancement — if built, re-tier here and in router.ts together."},
+];
+
+const TIERS=["Suppress","Murmur","Milestone","Outcome","Chat","Conditional"];
+const cls=t=>t.toLowerCase();
+
+/* counts (Conditional events count their primary lane in the 5-tier dash via their router default,
+   but we report Conditional separately) */
+function computeCounts(){
+  const c={Suppress:0,Murmur:0,Milestone:0,Outcome:0,Chat:0,Conditional:0,dev:0,changed:0};
+  D.forEach(d=>{ c[d.f]=(c[d.f]||0)+1; if(d.dev)c.dev++; if(d.st==='changed')c.changed++; });
+  return c;
+}
+const C=computeCounts();
+document.querySelectorAll('[data-c]').forEach(el=>{el.textContent=C[el.dataset.c]??0;});
+
+/* bars */
+(function(){
+  const max=Math.max(...TIERS.map(t=>C[t]));
+  const wrap=document.getElementById('bars');
+  TIERS.forEach(t=>{
+    const n=C[t]||0;
+    const row=document.createElement('div');
+    row.style.cssText='display:flex;align-items:center;gap:14px;margin:9px 0';
+    row.innerHTML=`<div style="width:118px;font-weight:700;font-size:13.5px;color:var(--${cls(t)})">${t}</div>
+      <div style="flex:1;background:var(--panel2);border-radius:8px;overflow:hidden;height:30px;border:1px solid var(--line)">
+        <div style="height:100%;width:${(n/max*100).toFixed(1)}%;background:linear-gradient(90deg,color-mix(in srgb,var(--${cls(t)}) 75%,transparent),var(--${cls(t)}));display:flex;align-items:center;justify-content:flex-end;padding-right:10px;color:#0d1117;font-weight:800;font-size:13px;min-width:30px">${n}</div>
+      </div>`;
+    wrap.appendChild(row);
+  });
+})();
+
+/* contested rulings cards */
+(function(){
+  const order=["tool_started","tool_completed","sub_agent_signals","error","phase","ladder_rung_committed","scoring_completed","validation_completed","plan_appended"];
+  const seen=new Set();const host=document.getElementById('rulings');
+  const picks=[];
+  order.forEach(name=>{ const d=D.find(x=>x.e===name&&(x.cont||x.st==='changed')); if(d&&!seen.has(name)){seen.add(name);picks.push(d);} });
+  // ensure we describe the canonical 9 with rule text
+  const canon={
+   tool_started:{c:"Milestone",f:"Conditional",rule:"Murmur while active → collapsed Milestone on completion; failure opens a card.",why:"<b>UX cognitive-load P0 wins over consistency.</b> A tool open+close pair is 2 spine rows per call — a scrolling wall. Feasibility is preserved: the card still materializes at close, keyed on group_id."},
+   tool_completed:{c:"Milestone",f:"Milestone + inspect",rule:"Stays a single collapsed spine row; full result_preview behind inspect-on-demand.",why:"<b>Hybrid.</b> The durable result is the *_saved artifact, not the tool — but the close must still close the card. Power-user keeps the detail without a transient receipt card."},
+   sub_agent_signals:{c:"Milestone",f:"Milestone + inspect",rule:"Findings attachment on the sub-agent card; promote to Outcome only if a finding is independently actionable.",why:"<b>Consistency + feasibility win.</b> One normalized shape across 4 agents — fragmenting one to Outcome breaks the SCA forwarder. The durable actionable surface is analysis_saved / phase_review, already Outcome."},
+   error:{c:"Milestone",f:"Milestone / Outcome (PR-TAA)",rule:"Standalone error → Milestone state + aria-live=assertive, traceback redacted. PR-TAA terminal error → Outcome retry card.",why:"<b>Splits the panel correctly.</b> A non-terminal error has a card to attach to; PR-TAA's has no spine and ends the run, so it must persist with a retry — exactly where UX's 'actionable' is true."},
+   phase:{c:"Milestone",f:"Murmur",rule:"Render 'Entering: reporting · 75%' as the live murmur line; coerce group_type for routing only.",why:"<b>Feasibility P0 is decisive.</b> With group_type=session/standalone it is structurally un-renderable as a spine node — Milestone is impossible, which is exactly what UX wanted anyway."},
+   ladder_rung_committed:{c:"Murmur",f:"Murmur + inspect",rule:"Stays the rate-limited tick; run_count/case_count audit via inspect + Dev mode.",why:"<b>Accessibility/UX win.</b> The watching human's job is 'is it progressing', not 'audit the txn'. A per-rung milestone re-creates the wall of noise; totals already surface in tms_backfill_completed."},
+   scoring_completed:{c:"Milestone",f:"Milestone + inspect",rule:"Single spine row; tier_bucket_counts mini-chart on expand.",why:"<b>Consistency/power-user win.</b> Scoring is a step, not a gated artifact — nothing waits on the human. The chart belongs in the collapsible step, not the Outcome lane reserved for gates and saves."},
+   validation_completed:{c:"Milestone",f:"Conditional (by final_pass)",rule:"final_pass=true → collapsed Milestone close. final_pass=false → persistent Outcome card + retry.",why:"<b>Best hybrid.</b> A passing validation needs no action; a failing one is actionable and must persist. Tier-by-payload is feasible — final_pass is documented."},
+   plan_appended:{c:"Milestone",f:"Murmur",rule:"Murmur the tick; merge new items into the already-open plan card in place.",why:"<b>The plan card already exists.</b> An append is a mutation, not a new milestone — a fresh spine row per append duplicates the plan."},
+  };
+  order.forEach(name=>{
+    const k=canon[name];const agents=[...new Set(D.filter(x=>x.e===name).map(x=>x.a))].join(", ");
+    const sev=(D.find(x=>x.e===name)||{}).sev||"P2";
+    const card=document.createElement('div');card.className='ruling';
+    card.innerHTML=`<div class="rtop">
+        <code class="ev">${name}</code>
+        <span class="sev ${sev}">${sev}</span>
+        <span style="color:var(--ink3);font-size:12px">${agents}</span>
+        <span style="flex:1"></span>
+        <span class="flow"><span class="tg ${cls(k.c)}">${k.c}</span><span class="arrow">→</span><span class="tg ${cls(k.f.split(' ')[0])}">${k.f}</span></span>
+      </div>
+      <div class="rule">⟶ ${k.rule}</div>
+      <div class="why">${k.why}</div>`;
+    host.appendChild(card);
+  });
+})();
+
+/* ledger table */
+const agentSel=document.getElementById('agent');
+[...new Set(D.map(d=>d.a))].forEach(a=>{const o=document.createElement('option');o.value=a;o.textContent=a;agentSel.appendChild(o);});
+const rowsHost=document.getElementById('rows');
+const state={q:"",agent:"",tiers:new Set(),flags:new Set()};
+
+function fbadge(d){
+  let s='';
+  if(d.st==='changed')s+=`<span class="flag changed">CHANGED</span>`;
+  else if(d.st==='dead')s+=`<span class="flag dead">DEAD</span>`;
+  else s+=`<span class="flag keep">KEEP</span>`;
+  if(d.cont)s+=`<span class="flag cont">CONTESTED</span>`;
+  if(d.dev)s+=`<span class="flag dev">DEV</span>`;
+  return s;
+}
+function render(){
+  rowsHost.innerHTML='';let shown=0;
+  D.forEach((d,i)=>{
+    if(state.agent&&d.a!==state.agent)return;
+    if(state.tiers.size&&!state.tiers.has(d.f.split(' ')[0]))return;
+    if(state.flags.has('changed')&&d.st!=='changed')return;
+    if(state.flags.has('contested')&&!d.cont)return;
+    if(state.flags.has('dev')&&!d.dev)return;
+    if(state.q){const hay=(d.e+' '+d.a+' '+d.note+' '+(d.rule||'')+' '+d.c+' '+d.f).toLowerCase();if(!hay.includes(state.q))return;}
+    shown++;
+    const tr=document.createElement('tr');tr.dataset.i=i;
+    const ff=d.f.split(' ')[0];
+    tr.innerHTML=`<td><code class="ev">${d.e}</code> <span style="color:var(--ink3);font-size:11.5px;font-family:var(--mono)">${d.g}</span></td>
+      <td class="agent">${d.a}</td>
+      <td><span class="miniflow"><span class="tg ${cls(d.c)}">${d.c}</span><span class="arrow">→</span><span class="tg ${cls(ff)}">${d.f}</span></span></td>
+      <td>${fbadge(d)}</td>`;
+    tr.addEventListener('click',()=>toggleDetail(tr,d));
+    rowsHost.appendChild(tr);
+  });
+  document.getElementById('countnote').textContent=`Showing ${shown} of ${D.length} events.`;
+}
+function toggleDetail(tr,d){
+  const nx=tr.nextElementSibling;
+  if(nx&&nx.classList.contains('detail')){nx.remove();return;}
+  const det=document.createElement('tr');det.className='detail';
+  det.innerHTML=`<td colspan="4"><div class="note">${d.rule?`<div style="color:var(--cond);font-weight:700;margin-bottom:6px">⟶ ${d.rule}</div>`:''}${d.note}</div></td>`;
+  tr.after(det);
+}
+document.getElementById('q').addEventListener('input',e=>{state.q=e.target.value.toLowerCase();render();});
+agentSel.addEventListener('change',e=>{state.agent=e.target.value;render();});
+document.querySelectorAll('#tierfilters .fb').forEach(b=>b.addEventListener('click',()=>{
+  const t=b.dataset.tier;const on=b.dataset.on==='1';b.dataset.on=on?'0':'1';
+  if(on)state.tiers.delete(t);else state.tiers.add(t);render();
+}));
+document.querySelectorAll('.fb.toggle').forEach(b=>b.addEventListener('click',()=>{
+  const f=b.dataset.flag;const on=b.dataset.on==='1';b.dataset.on=on?'0':'1';
+  if(on)state.flags.delete(f);else state.flags.add(f);render();
+}));
+render();
+</script>
+
+<script>
+/* ===================== P1 · MURMUR ARBITRATION SIMULATOR ===================== */
+(function(){
+  const SCRIPT=[
+   {t:0,note:"Only a thought is live — it floats to the front."},
+   {t:0,ch:"reasoning",text:"Prioritizing P0 regression tests"},
+   {t:1500,note:"A tool opens. It seizes ACTION — the thought is pushed to THOUGHT, never overwriting it."},
+   {t:1500,ch:"tool_open",text:"search_test_cases",detail:"checkout payment flow",id:"call_1"},
+   {t:2600,ch:"reasoning",text:"Guest checkout may lack refund coverage"},
+   {t:3200,ch:"subprog",text:"Exploring app",detail:"screenshot 3/8",prog:[3,8]},
+   {t:4000,note:"Tool settles → leaves Murmur (becomes a milestone). Determinate progress reclaims ACTION."},
+   {t:4000,ch:"tool_settle",id:"call_1"},
+   {t:4300,ch:"progress",text:"Mapping forms"},
+   {t:4900,ch:"subprog",detail:"screenshot 6/8",prog:[6,8]},
+   {t:5500,ch:"tick",text:"tier view · smoke 18"},
+   {t:6100,ch:"subprog",detail:"screenshot 8/8",prog:[8,8]},
+   {t:6900,note:"Parallel fan-out: ≥2 workers open → ACTION becomes an N-of-M strip, not a flicker."},
+   {t:6900,ch:"worker_start",id:"w1",label:"discovery"},
+   {t:7150,ch:"worker_start",id:"w2",label:"impact"},
+   {t:7400,ch:"worker_start",id:"w3",label:"blast_radius"},
+   {t:8400,ch:"worker_end",id:"w1"},
+   {t:9000,note:"A validation issue starts repeating…"},
+   {t:9100,ch:"worker_end",id:"w2"},
+   {t:9200,ch:"validation",text:"Iteration 1 · missing expected on step 4",key:"step4"},
+   {t:9900,ch:"validation",text:"Iteration 2 · missing expected on step 4",key:"step4"},
+   {t:10500,note:"Same key ≥3× → a stall banner pins ABOVE the line; the line keeps breathing underneath."},
+   {t:10500,ch:"validation",text:"Iteration 3 · missing expected on step 4",key:"step4"},
+   {t:10800,ch:"worker_end",id:"w3"},
+   {t:11800,note:"Everything decays past its TTL — the line clears rather than show a stale lie."},
+   {t:13200,note:"Run complete."},
+  ];
+  const TTL={subprog:4000,progress:4000,validation:5000,tick:3000,reasoning:6000,tool_open:20000};
+  const CHIPCOLOR={tool_open:"var(--murmur)",subprog:"var(--murmur)",fanout:"var(--murmur)",progress:"#7dd3fc",validation:"#7dd3fc",tick:"#7dd3fc",reasoning:"var(--milestone)"};
+  const CHIPS=["reasoning","tool_open","subprog","progress","validation","tick","fanout"];
+  let live={},workers=new Map(),stall=null,fired=new Set(),elapsed=0,timer=null,playing=false;
+  const SPEED=1;
+  const $line=document.getElementById('mLine'),$chips=document.getElementById('mChips'),
+        $stall=document.getElementById('mStall'),$note=document.getElementById('mNote'),$clock=document.getElementById('mClock');
+  function reset(){clearInterval(timer);timer=null;playing=false;live={};workers=new Map();stall=null;fired=new Set();elapsed=0;
+    $note.textContent="";document.getElementById('mPlay').textContent="▶ Play a run";render();$clock.textContent="0.0s";}
+  function apply(op){
+    if(op.note!=null)$note.textContent=op.note;
+    const now=elapsed;
+    switch(op.ch){
+      case "reasoning":live.reasoning={text:op.text,ts:now};break;
+      case "tool_open":live.tool_open={text:op.text,detail:op.detail,ts:now};break;
+      case "tool_settle":delete live.tool_open;break;
+      case "subprog":live.subprog={text:op.text??live.subprog?.text??"Working",detail:op.detail,prog:op.prog,ts:now};break;
+      case "progress":live.progress={text:op.text,ts:now};break;
+      case "tick":live.tick={text:op.text,ts:now};break;
+      case "validation":live.validation={text:op.text,ts:now};
+        if(stall&&stall.key===op.key)stall.count++;else stall={key:op.key,count:1};break;
+      case "worker_start":workers.set(op.id,{label:op.label,state:"run"});break;
+      case "worker_end":if(workers.get(op.id))workers.get(op.id).state="done";break;
+    }
+  }
+  function sweep(){
+    const now=elapsed;
+    for(const k of Object.keys(live)){if(now-live[k].ts>(TTL[k]||4000))delete live[k];}
+    if(!live.validation)stall=null;
+    // fan-out membership
+    const running=[...workers.values()].filter(w=>w.state==="run").length;
+    if(workers.size&&running<2&&now-Math.max(...[...workers.values()].map(()=>now))>0){/*dissolve handled in render*/}
+  }
+  function seg(cls,html){return `<span class="seg ${cls}">${html}</span>`;}
+  function render(){
+    const running=[...workers.values()].filter(w=>w.state==="run");
+    const showStrip=workers.size>=2&&running.length>=2;
+    let action=null,actionCh=null;
+    if(showStrip){const done=[...workers.values()].filter(w=>w.state==="done").length;
+      action=`<span class="spin"></span>Signals ${done}/${workers.size} · ${running.map(w=>w.label).join(", ")}`;actionCh="fanout";}
+    else if(live.tool_open){action=`<span class="spin"></span>Running ${live.tool_open.text}`+(live.tool_open.detail?` · ${live.tool_open.detail}`:"");actionCh="tool_open";}
+    else if(live.subprog){const p=live.subprog.prog;const bar=p?` <span class="pbar"><i style="width:${(p[0]/p[1]*100)|0}%"></i></span>`:"";
+      action=`${live.subprog.text}${live.subprog.detail?` · ${live.subprog.detail}`:""}${bar}`;actionCh="subprog";}
+    let detail=null,detailCh=null;
+    if(live.progress){detail=live.progress.text;detailCh="progress";}
+    else if(live.validation){detail=live.validation.text;detailCh="validation";}
+    else if(live.tick){detail=live.tick.text;detailCh="tick";}
+    const thought=live.reasoning?.text;
+    const parts=[];
+    if(action)parts.push(seg("action",action));
+    if(detail)parts.push(seg("detail",detail));
+    if(thought)parts.push(seg("thought","🧠 "+thought));
+    $line.innerHTML=parts.length?parts.join('<span class="sep">·</span>'):'<span class="seg detail" style="color:var(--ink3)">— idle —</span>';
+    // stall
+    if(stall&&stall.count>=3){$stall.style.display="block";$stall.textContent="⚠ Still working on: "+("missing expected on step 4");}
+    else $stall.style.display="none";
+    // chips
+    const winCh=new Set([actionCh,detailCh,thought?"reasoning":null]);
+    $chips.innerHTML=CHIPS.map(c=>{
+      const isLive=c==="fanout"?(workers.size>=2&&running.length>=2):!!live[c];
+      const cl="chipl"+(isLive?(winCh.has(c)?" live win":" live"):"");
+      return `<span class="${cl}" style="--seg-c:${CHIPCOLOR[c]}">${c==="tool_open"?"tool-open":c}</span>`;
+    }).join("");
+  }
+  function tick(){
+    elapsed+=100*SPEED;$clock.textContent=(elapsed/1000).toFixed(1)+"s";
+    SCRIPT.forEach((op,i)=>{if(op.t<=elapsed&&!fired.has(i)){fired.add(i);apply(op);}});
+    sweep();render();
+    if(elapsed>=13400){clearInterval(timer);timer=null;playing=false;document.getElementById('mPlay').textContent="▶ Play again";}
+  }
+  document.getElementById('mPlay').addEventListener('click',()=>{
+    if(playing){clearInterval(timer);timer=null;playing=false;document.getElementById('mPlay').textContent="▶ Resume";return;}
+    if(elapsed>=13400)reset();
+    playing=true;document.getElementById('mPlay').textContent="⏸ Pause";timer=setInterval(tick,100);
+  });
+  document.getElementById('mReset').addEventListener('click',reset);
+  render();
+})();
+
+/* ===================== P3 · FAIL-LOUD ROUTER TESTER ===================== */
+(function(){
+  const ALLOW={test_case_saved:"Outcome",scenario_saved:"Outcome",reasoning:"Murmur",progress:"Murmur",tool_started:"Milestone",question_asked:"Outcome",visualization:"Outcome"};
+  const SUPPRESS=new Set(["token_usage","context_saved","replay_complete","session_restored","runs_updated","sprint_issues_loaded"]);
+  const SUFFIX=/(_detected|_complete|_completed|_saved|_ready|_generated|_published)$|^visualization$/;
+  const hasPayload=p=>p&&Object.keys(p).filter(k=>!["lifecycle","thread_id"].includes(k)).length>0;
+  const isChart=p=>p&&((p.viz_type&&p.data)||(p.data&&p.data.viz_type));
+  const hasFind=p=>p&&((Array.isArray(p.signals)&&p.signals.length)||(Array.isArray(p.findings)&&p.findings.length)||p.findings_count>0);
+  const isArt=p=>p&&(Object.keys(p).some(k=>/_saved$/.test(k))||["result","analysis_name","scenario","test_case"].some(k=>k in p));
+  const isProg=p=>p&&(("iteration"in p&&Array.isArray(p.issues))||("phase_name"in p&&"progress_pct"in p)||"tier_bucket_counts"in p);
+  function route(ev){
+    const et=ev.event_type,p=ev.payload||{};
+    if(SUPPRESS.has(et)||ev.group_type==="inbound")return{layer:0,tier:"Suppress",by:"transport"};
+    if(ALLOW[et])return{layer:1,tier:ALLOW[et],by:"allowlist"};
+    if(isChart(p))return{layer:2,tier:"Outcome",by:"shape · chart"};
+    if(hasFind(p))return{layer:2,tier:"Outcome",by:"shape · findings"};
+    if(isArt(p))return{layer:2,tier:"Outcome",by:"shape · artifact"};
+    if(isProg(p))return{layer:2,tier:"Milestone",by:"shape · progress"};
+    let cand=hasPayload(p)?"Outcome":"Milestone";
+    if(SUFFIX.test(et)&&cand!=="Outcome")cand="Outcome";
+    return{layer:4,tier:cand,by:hasPayload(p)?'default · "Unrecognised result" card':"default · log line"};
+  }
+  const oldRoute=ev=>SUFFIX.test(ev.event_type)?"Outcome":"Murmur";
+  const SAMPLES=[
+   {label:"✅ Known artifact",sub:"test_case_saved",ev:{agent:"taa",event_type:"test_case_saved",payload:{test_case_saved:true,human_id:"TC-105"}}},
+   {label:"📊 Unknown chart",sub:"coverage_report_ready",hot:1,ev:{agent:"caa",event_type:"coverage_report_ready",payload:{viz_type:"donut",title:"Coverage",data:{covered:240}}}},
+   {label:"🔎 Unknown findings",sub:"gap_found",hot:1,ev:{agent:"caa",event_type:"gap_found",payload:{signals:[{finding:"no refund test",suggestion:"add one"}]}}},
+   {label:"🧩 Unknown + empty",sub:"heartbeat_x",ev:{agent:"raa",event_type:"heartbeat_x",payload:{}}},
+   {label:"🔇 Plumbing",sub:"token_usage",ev:{agent:"common",event_type:"token_usage",payload:{total_tokens:5090}}},
+   {label:"💬 Known murmur",sub:"reasoning",ev:{agent:"common",event_type:"reasoning",payload:{message:"thinking"}}},
+  ];
+  const $s=document.getElementById('rSamples'),$lad=document.getElementById('rLadder'),$v=document.getElementById('rVerdict'),$n=document.getElementById('rNote');
+  $s.innerHTML=SAMPLES.map((s,i)=>`<button class="rsample" data-i="${i}"><div>${s.label}</div><code>${s.sub}</code></button>`).join("");
+  function show(i){
+    const s=SAMPLES[i];const r=route(s.ev);const old=oldRoute(s.ev);
+    [...$s.children].forEach((b,j)=>b.classList.toggle('sel',j==i));
+    [...$lad.children].forEach(li=>{const l=+li.dataset.l;li.classList.toggle('hit',l===r.layer);li.classList.toggle('passed',l<r.layer);});
+    $v.innerHTML=`<span style="color:var(--ink3);font-size:12px">caught at <b style="color:var(--ink)">Layer ${r.layer}</b> · ${r.by} →</span> <span class="tg ${r.tier.toLowerCase()}">${r.tier}</span>`;
+    const dropped=old==="Murmur"&&r.tier!=="Murmur"&&r.tier!=="Suppress";
+    $n.innerHTML=dropped
+      ?`<span class="rold">⚠ Old suffix heuristic → Murmur — this ${isChart(s.ev.payload)?"chart":hasFind(s.ev.payload)?"finding":"result"} would have been silently dropped.</span> Every miss also fires the <code class="ev">unmatched_type</code> beacon.`
+      :(r.by==="allowlist"?"Resolved deterministically — no telemetry needed.":r.by==="transport"?"Plumbing — never reaches the UI.":"Routed safely; telemetry beacon recorded for promotion.");
+  }
+  $s.querySelectorAll('.rsample').forEach(b=>b.addEventListener('click',()=>show(+b.dataset.i)));
+  show(1);
+})();
+
+/* ===================== P4 · OUTCOME DENSITY DEMO ===================== */
+(function(){
+  const SCEN=[
+   {id:"g1",title:"Guest checkout",pr:"P1",cards:[
+     {id:"TC-101",title:"Checkout with Visa",pr:"P1",badge:"NEW"},
+     {id:"TC-102",title:"Checkout with expired card",pr:"P2",badge:"NEW"},
+     {id:"TC-103",title:"Guest refund flow",pr:"P1",badge:"NEW"},
+     {id:"TC-104",title:"Apply promo code",pr:"P2",badge:"UPDATE"},
+     {id:"TC-105",title:"Address validation",pr:"P2",badge:"NEW"},
+     {id:"TC-106",title:"Tax calculation EU",pr:"P1",badge:"UPDATE"},
+   ]},
+   {id:"g2",title:"Refund flow",pr:"P2",cards:[
+     {id:"TC-201",title:"Full refund within 30d",pr:"P1",badge:"NEW"},
+     {id:"TC-202",title:"Partial refund",pr:"P2",badge:"NEW"},
+     {id:"TC-203",title:"Refund to expired card",pr:"P2",badge:"UPDATE"},
+     {id:"TC-204",title:"Refund denied past window",pr:"P3",badge:"NEW"},
+     {id:"TC-205",title:"Refund audit log",pr:"P3",badge:"UPDATE"},
+   ]},
+   {id:"g3",title:"Payment errors",pr:"P0",cards:[
+     {id:"TC-301",title:"Gateway timeout retry",pr:"P0",badge:"NEW"},
+     {id:"TC-302",title:"Declined card messaging",pr:"P0",badge:"NEW"},
+     {id:"TC-303",title:"Duplicate charge guard",pr:"P0",badge:"UPDATE"},
+   ]},
+  ];
+  const FLAT=[];SCEN.forEach(s=>s.cards.forEach(c=>{c.gid=s.id;c.status="pending";FLAT.push(c);}));
+  const TOTAL=FLAT.length;
+  let settled=true,openSet=new Set(["g1"]),showAll={},streamIdx=TOTAL,replayT=null;
+  const $g=document.getElementById('dGroups'),$big=document.getElementById('dBig'),$brk=document.getElementById('dBrk'),
+        $meter=document.getElementById('dMeter'),$rev=document.getElementById('dRev'),$ctas=document.getElementById('dCtas');
+  const reviewed=()=>FLAT.filter(c=>c.status!=="pending").length;
+  function brkText(){const nw=FLAT.filter(c=>c.badge==="NEW").length,up=TOTAL-nw;
+    const p0=FLAT.filter(c=>c.pr==="P0").length,p1=FLAT.filter(c=>c.pr==="P1").length;
+    return `${nw} NEW · ${up} UPDATE · P0 ${p0} / P1 ${p1} / P2+ ${TOTAL-p0-p1}`;}
+  function cardDOM(c){
+    const st=c.status;
+    return `<div class="tcard2 ${st==='accepted'?'acc':st==='rejected'?'rej':''}">
+      <span class="tid">${c.id}</span><span class="badge ${c.badge}">${c.badge}</span>
+      <span>${c.title}</span><span class="prchip">${c.pr}</span>
+      ${st==='pending'?`<span class="cardbtns" style="margin-left:auto"><button class="minib" data-acc="${c.id}">Accept</button><button class="minib" data-rej="${c.id}">Reject</button></span>`
+        :`<span class="stat ${st}">${st==='accepted'?'✓ Saved to folder':'✕ Rejected'}</span>`}
+    </div>`;
+  }
+  function render(){
+    // banner
+    if(settled){$big.textContent=`${TOTAL} cases across ${SCEN.length} scenarios`;$brk.textContent=brkText();$ctas.style.display="flex";}
+    else{$big.textContent="Authoring…";$brk.textContent=`${streamIdx} test cases so far`;$ctas.style.display="none";}
+    $meter.style.width=(reviewed()/TOTAL*100)+"%";$rev.textContent=`${reviewed()} / ${TOTAL} reviewed`;
+    // groups
+    let html="";
+    SCEN.forEach((s,gi)=>{
+      const streamed=s.cards.filter(c=>FLAT.indexOf(c)<streamIdx);
+      if(!streamed.length)return;
+      const activeGroup=!settled&&streamed.length&&FLAT.indexOf(s.cards[streamed.length-1])===streamIdx-1;
+      const isOpen=settled?openSet.has(s.id):activeGroup;
+      const nw=s.cards.filter(c=>c.badge==="NEW").length;
+      let body="";
+      if(isOpen){
+        let visible;
+        if(settled){visible=showAll[s.id]?s.cards:s.cards.slice(0,5);}
+        else{visible=streamed.slice(-3);} // rolling window of last 3 while streaming
+        body=visible.map(cardDOM).join("");
+        const hidden=(settled?s.cards.length:streamed.length)-visible.length;
+        if(hidden>0)body+=`<div class="morechip" data-more="${s.id}">+${hidden} ${settled?'more in this scenario ▾':'earlier — folded'}</div>`;
+        if(settled)body+=`<div style="margin-top:9px"><button class="minib" data-gacc="${s.id}">Accept all in scenario</button></div>`;
+      }
+      html+=`<div class="group ${isOpen?'open':''}" data-g="${s.id}">
+        <div class="ghead" data-head="${s.id}">
+          <span class="gtri">▶</span><span class="gtitle">${s.title}</span><span class="gpill">${s.pr}</span>
+          <span class="gcount">${settled?s.cards.length:streamed.length} cases · ${nw} NEW${activeGroup?' · authoring…':''}</span>
+        </div><div class="gbody">${body}</div></div>`;
+    });
+    $g.innerHTML=html;
+  }
+  function setStatus(ids,st){ids.forEach(id=>{const c=FLAT.find(x=>x.id===id);if(c&&(st!=='pending'?c.status==='pending'||true:true))c.status=st;});render();}
+  // events
+  $g.addEventListener('click',e=>{
+    const h=e.target.closest('[data-head]');if(h&&settled){const id=h.dataset.head;openSet.has(id)?openSet.delete(id):openSet.add(id);render();return;}
+    const m=e.target.closest('[data-more]');if(m&&settled){showAll[m.dataset.more]=true;render();return;}
+    const a=e.target.closest('[data-acc]');if(a){setStatus([a.dataset.acc],"accepted");return;}
+    const r=e.target.closest('[data-rej]');if(r){setStatus([r.dataset.rej],"rejected");return;}
+    const ga=e.target.closest('[data-gacc]');if(ga){setStatus(SCEN.find(s=>s.id===ga.dataset.gacc).cards.map(c=>c.id),"accepted");return;}
+  });
+  $ctas.addEventListener('click',e=>{const b=e.target.closest('[data-act]');if(!b)return;const act=b.dataset.act;
+    if(act==="all")setStatus(FLAT.map(c=>c.id),"accepted");
+    else if(act==="p01")setStatus(FLAT.filter(c=>c.pr==="P0"||c.pr==="P1").map(c=>c.id),"accepted");
+    else if(act==="newonly")setStatus(FLAT.filter(c=>c.badge==="NEW").map(c=>c.id),"accepted");
+    else if(act==="reset"){FLAT.forEach(c=>c.status="pending");render();}
+  });
+  function settle(){clearInterval(replayT);replayT=null;settled=true;streamIdx=TOTAL;openSet=new Set(["g1"]);showAll={};render();}
+  document.getElementById('dReplay').addEventListener('click',()=>{
+    clearInterval(replayT);settled=false;streamIdx=0;FLAT.forEach(c=>c.status="pending");render();
+    replayT=setInterval(()=>{streamIdx++;if(streamIdx>=TOTAL){clearInterval(replayT);setTimeout(settle,600);}render();},420);
+  });
+  document.getElementById('dSettle').addEventListener('click',settle);
+  render();
+})();
+</script>
+</body>
+</html>
