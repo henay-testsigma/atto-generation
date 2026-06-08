@@ -12,10 +12,6 @@ dist
 dist-ssr
 *.local
 
-# npm auth — contains a private-registry token; never commit it.
-# Copy .npmrc.example to .npmrc and add your token locally.
-.npmrc
-
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

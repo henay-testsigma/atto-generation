@@ -1,4 +1,34 @@
-# React + TypeScript + Vite
+# Atto Generation
+
+Event-driven prototype of Testsigma's **"Atto"** agentic test-generation UX (Vite 8 + React 19 +
+TypeScript), plus a `/catalog` living-spec documenting how every wire event renders. See `CLAUDE.md`
+for the full architecture.
+
+## Setup
+
+This app depends on the **private** `@testsigmainc/ui-atoms` package from GitHub Packages, so npm
+needs a token. The committed `.npmrc` reads it from the `NODE_AUTH_TOKEN` environment variable (no
+token is stored in the repo):
+
+```bash
+export NODE_AUTH_TOKEN=<a GitHub PAT with read:packages>   # add to your shell profile to persist
+npm install
+npm run dev        # http://localhost:5173/  (prototype)  ·  /catalog (event catalog)
+npm run build      # tsc -b && vite build
+npm run gen:ledger # regenerate src/prototype/catalog/ledger.ts from tier-decision-doc.html
+```
+
+## Deploying to Vercel
+
+- Framework preset **Vite** (build `npm run build`, output `dist`) is auto-detected.
+- Add a **`NODE_AUTH_TOKEN`** environment variable in the Vercel project settings (a GitHub PAT with
+  `read:packages`) so the install step can fetch `@testsigmainc/ui-atoms`.
+- `vercel.json` rewrites all paths to `index.html` so client routes like `/catalog` resolve on direct
+  load / refresh (the app routes on `window.location.pathname`).
+
+---
+
+## React + TypeScript + Vite
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
