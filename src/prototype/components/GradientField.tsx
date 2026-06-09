@@ -14,7 +14,7 @@ interface Props {
  */
 export function GradientField({ active, intensity = 1 }: Props) {
   const reduce = useReducedMotion()
-  const op = (active ? 0.2 : 0.05) * intensity
+  const op = (active ? 0.3 : 0.05) * intensity
   return (
     <motion.div
       className="proto-gradient-field"
