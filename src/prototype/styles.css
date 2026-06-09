@@ -878,7 +878,11 @@
 .proto-murmur-row {
   width: 100%;
   display: flex;
-  align-items: center;
+  /* Two-line layout: action on line 1, supporting detail/thought on line 2.
+     Anchor avatar / timer / chevron to the first line (flex-start) so they
+     sit beside the action headline rather than floating to the vertical
+     middle of the stack. */
+  align-items: flex-start;
   gap: 10px;
   padding: 6px 2px;
   background: transparent;
@@ -887,29 +891,33 @@
   text-align: left;
   font: inherit;
   color: inherit;
-  /* Establish a container so the segments can reflow to two lines when the
-     murmur sits in a narrow rail. */
-  container-type: inline-size;
-  container-name: murmur;
 }
+/* Optically center the 16px avatar and the timer/chevron against the 18px
+   first text line. */
+.proto-murmur-row > svg:first-child { margin-top: 1px; }
 
+/* Segments stack vertically: action headline on line 1, supporting
+   detail/thought on the line(s) below — readable rather than competing for a
+   single line with the shimmering action. */
 .proto-murmur-segments {
   flex: 1;
   display: flex;
-  align-items: center;
-  gap: 4px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
   min-width: 0;
   font-size: 13px;
   line-height: 18px;
-  white-space: nowrap;
+  white-space: normal;
   overflow: hidden;
 }
 
-/* PRIMARY (action / fan-out label / idle) — line 1, truncates with ellipsis.
-   Shrinks last; the supporting group yields first. */
+/* PRIMARY (action / fan-out label / idle) — line 1 headline, single line that
+   truncates with an ellipsis if it ever overflows. */
 .proto-murmur-primary {
-  flex: 0 1 auto;
+  flex: 0 0 auto;
   min-width: 0;
+  max-width: 100%;
   overflow: hidden;
 }
 .proto-murmur-primary > * {
@@ -920,14 +928,20 @@
   white-space: nowrap;
 }
 
-/* SUPPORT (detail · thought, or worker pills) — inline on wide; wraps to a
-   second line on narrow rails. */
+/* SUPPORT (detail · thought, or worker pills) — line 2: the action stays on
+   line 1; the supporting pieces sit together inline on line 2, separated by a
+   `·`. A single long piece still wraps to multiple lines; two short pieces
+   share one line rather than stacking. */
 .proto-murmur-support {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 4px;
+  row-gap: 1px;
   min-width: 0;
-  overflow: hidden;
+  width: 100%;
+  overflow: visible;
 }
 
 .proto-murmur-action {
@@ -965,60 +979,27 @@
   font-size: 12px;
   flex: 0 1 auto;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  max-width: 100%;
+  overflow: visible;
+  white-space: normal;
+  line-height: 16px;
 }
 
-.proto-murmur-detail { flex-shrink: 8; }
-.proto-murmur-thought { flex-shrink: 20; }
-
+/* Show the `·` between supporting pieces, but not before the first one (the
+   action already lives on its own line above). */
 .proto-murmur-sep { margin-right: 2px; }
+.proto-murmur-support > *:first-child .proto-murmur-sep { display: none; }
 
 .proto-murmur-thought {
   font-style: italic;
 }
 
 .proto-murmur-fanout-pills {
-  display: inline-flex;
+  display: flex;
+  flex-wrap: wrap;
   gap: 4px;
-  flex-shrink: 0;
-}
-
-/* Narrow rail: stack — action on line 1, each piece of supporting text on its
-   own line below (full text, no separators), worker pills wrap. */
-@container murmur (max-width: 430px) {
-  .proto-murmur-segments {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 1px;
-    white-space: normal;
-  }
-  .proto-murmur-primary { max-width: 100%; }
-  .proto-murmur-support {
-    flex-direction: column;
-    align-items: flex-start;
-    row-gap: 1px;
-    white-space: normal;
-    overflow: visible;
-    width: 100%;
-  }
-  .proto-murmur-support .proto-murmur-sep { display: none; }
-  .proto-murmur-support .proto-murmur-detail,
-  .proto-murmur-support .proto-murmur-thought {
-    overflow: visible;
-    text-overflow: clip;
-    white-space: normal;
-    flex: none;
-    max-width: 100%;
-    line-height: 16px;
-  }
-  .proto-murmur-fanout-pills {
-    display: flex;
-    flex-wrap: wrap;
-    max-width: 100%;
-    row-gap: 3px;
-  }
+  row-gap: 3px;
+  max-width: 100%;
 }
 
 .proto-murmur-fanout-pill {
