@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import { ArrowRight, MessageSquare, Sparkles, Send } from 'lucide-react'
+import { motion } from 'framer-motion'
+import { ArrowRight, MessageSquare, Sparkles } from 'lucide-react'
 import { Kbd } from '@testsigmainc/ui-atoms'
 import type { ReactNode } from 'react'
 
@@ -10,7 +10,9 @@ export interface GateOption {
   description?: string
   /** Optional icon shown on the left of the row. */
   icon?: ReactNode
-  /** Reveals an inline text field when picked (like "Other…"). */
+  /** Routes the reply to the main composer instead of resolving immediately
+   *  (e.g. "Modify in chat" — the user types their changes in the prompt box
+   *  below rather than in a second, separate input). */
   expandsText?: boolean
   /** Render this option emphasized (gradient accent on the arrow). */
   primary?: boolean
@@ -28,6 +30,10 @@ interface Props {
   gate: QuestionGate
   onAnswer: (id: string, freeText?: string) => void
   onSkip?: () => void
+  /** Fired when an `expandsText` option (e.g. "Modify in chat") is picked.
+   *  The composer below takes over: it focuses and swaps to a contextual
+   *  placeholder so the user types their reply in the one prompt box. */
+  onPickText?: (o: GateOption) => void
   /** Catalog/preview mode: don't auto-focus or grab the global keydown so a
    *  mounted gate can't hijack page scroll, search, or typing. */
   passive?: boolean
@@ -39,36 +45,31 @@ interface Props {
  * Renders above the composer as a single bordered card with the question
  * + a vertical list of full-width option rows (left-aligned label, right
  * arrow, hover background). Picking an option with `expandsText:true`
- * (e.g. "Modify in chat", "Other…") reveals an inline input. Focus moves
- * to the first row on mount; the question announces assertively.
+ * (e.g. "Modify in chat") marks the row active and hands off to the main
+ * composer below — the user types their reply in the single prompt box
+ * rather than a second, separate field. Focus moves to the first row on
+ * mount; the question announces assertively.
  */
-export function InputGate({ gate, onAnswer, onSkip, passive }: Props) {
+export function InputGate({ gate, onAnswer, onSkip, onPickText, passive }: Props) {
   const rowRefs = useRef<(HTMLButtonElement | null)[]>([])
-  const [expandedId, setExpandedId] = useState<string | null>(null)
-  const [text, setText] = useState('')
+  const [activeTextId, setActiveTextId] = useState<string | null>(null)
 
   useEffect(() => {
     if (!passive) rowRefs.current[0]?.focus()
-    setExpandedId(null)
-    setText('')
+    setActiveTextId(null)
   }, [gate.id, passive])
 
   const onPick = useCallback(
     (o: GateOption) => {
       if (o.expandsText) {
-        setExpandedId(o.id)
-        // focus the input after it mounts
-        requestAnimationFrame(() => {
-          const inp = document.querySelector<HTMLInputElement>(
-            '.proto-gate-row-input',
-          )
-          inp?.focus()
-        })
+        // Hand off to the main composer — no second input inside the gate.
+        setActiveTextId(o.id)
+        onPickText?.(o)
       } else {
         onAnswer(o.id)
       }
     },
-    [onAnswer],
+    [onAnswer, onPickText],
   )
 
   // Single window-level keydown handler — handles every kind of keyboard
@@ -159,7 +160,7 @@ export function InputGate({ gate, onAnswer, onSkip, passive }: Props) {
       {gate.helper && <div className="proto-gate-helper">{gate.helper}</div>}
       <div className="proto-gate-list" role="listbox">
         {gate.options.map((o, i) => {
-          const isExpanded = expandedId === o.id
+          const isActive = activeTextId === o.id
           const shortcut = i < 9 ? String(i + 1) : null
           return (
             <div key={o.id} className="proto-gate-row-wrap">
@@ -180,7 +181,7 @@ export function InputGate({ gate, onAnswer, onSkip, passive }: Props) {
                   stiffness: 360,
                   damping: 28,
                 }}
-                className={`proto-gate-row ${o.primary ? 'is-primary' : ''} ${isExpanded ? 'is-active' : ''}`}
+                className={`proto-gate-row ${o.primary ? 'is-primary' : ''} ${isActive ? 'is-active' : ''}`}
               >
                 {o.icon && (
                   <span className="proto-gate-row-icon" aria-hidden>
@@ -205,53 +206,6 @@ export function InputGate({ gate, onAnswer, onSkip, passive }: Props) {
                   <ArrowRight size={13} />
                 </span>
               </motion.button>
-              <AnimatePresence initial={false}>
-                {isExpanded && (
-                  <motion.form
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
-                    exit={{ opacity: 0, height: 0 }}
-                    transition={{
-                      type: 'spring',
-                      stiffness: 320,
-                      damping: 28,
-                    }}
-                    className="proto-gate-row-input-wrap"
-                    onSubmit={(e) => {
-                      e.preventDefault()
-                      if (text.trim()) onAnswer(o.id, text.trim())
-                    }}
-                  >
-                    <div className="proto-gate-row-input-row">
-                      <input
-                        value={text}
-                        onChange={(ev) => setText(ev.target.value)}
-                        onKeyDown={(ev) => {
-                          if (ev.key === 'Escape') {
-                            ev.preventDefault()
-                            setExpandedId(null)
-                            rowRefs.current[i]?.focus()
-                          }
-                        }}
-                        placeholder={
-                          o.id.includes('modify')
-                            ? 'Describe the changes you want…'
-                            : 'Type your answer…'
-                        }
-                        className="proto-gate-row-input"
-                      />
-                      <button
-                        type="submit"
-                        className="proto-gate-row-input-send"
-                        disabled={!text.trim()}
-                        aria-label="Send"
-                      >
-                        <Send size={12} />
-                      </button>
-                    </div>
-                  </motion.form>
-                )}
-              </AnimatePresence>
             </div>
           )
         })}

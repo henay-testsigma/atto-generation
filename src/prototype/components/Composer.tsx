@@ -58,12 +58,21 @@ export function Composer({
   passive,
 }: Props) {
   const [val, setVal] = useState(initialValue)
+  // Contextual placeholder set when a gate's "Modify in chat"-style option is
+  // picked — the reply happens in THIS box, not a second input in the gate.
+  const [gatePlaceholder, setGatePlaceholder] = useState<string | null>(null)
   const taRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
     // hero composer focuses on mount
     if (variant === 'hero') taRef.current?.focus()
   }, [variant])
+
+  // Reset the contextual placeholder whenever the gate changes or the composer
+  // leaves the gate state.
+  useEffect(() => {
+    setGatePlaceholder(null)
+  }, [gate?.id, state])
 
   const submit = () => {
     const t = val.trim()
@@ -163,7 +172,20 @@ export function Composer({
     <div className="proto-composer-bottom" data-state={state}>
       <AnimatePresence>
         {state === 'gate' && gate && onAnswer && (
-          <InputGate gate={gate} onAnswer={onAnswer} passive={passive} />
+          <InputGate
+            gate={gate}
+            onAnswer={onAnswer}
+            onPickText={(o) => {
+              setGatePlaceholder(
+                o.id.includes('modify')
+                  ? 'Describe the changes you want…'
+                  : 'Type your answer…',
+              )
+              // Focus the single prompt box below so the user types here.
+              requestAnimationFrame(() => taRef.current?.focus())
+            }}
+            passive={passive}
+          />
         )}
       </AnimatePresence>
       <div className="proto-composer-bottom-grad" aria-hidden />
@@ -172,7 +194,7 @@ export function Composer({
           ref={taRef}
           value={val}
           onChange={(e) => setVal(e.target.value)}
-          placeholder={placeholder}
+          placeholder={gatePlaceholder ?? placeholder}
           className="proto-composer-bottom-ta"
           rows={1}
           onKeyDown={(e) => {
